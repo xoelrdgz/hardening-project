@@ -1,0 +1,284 @@
+---
+# =============================================================================
+# CIS Ubuntu Server 24.04 LTS - Security Tools Installation
+# Version: 1.0.0
+# Author: xoelrdgz
+#
+# This file installs and configures security tools required for comprehensive
+# security auditing and to improve Lynis hardening score.
+# =============================================================================
+
+- name: Display security tools section header
+  ansible.builtin.debug:
+    msg: "========== Installing Security Tools =========="
+  tags:
+    - security_tools
+    - lynis
+
+# =============================================================================
+# Essential Security Tools
+# =============================================================================
+
+- name: Install essential security tools
+  ansible.builtin.apt:
+    name:
+      - lynis
+      - auditd
+      - audispd-plugins
+      - aide
+      - aide-common
+      - rkhunter
+      - chkrootkit
+    state: present
+    update_cache: true
+  tags:
+    - security_tools
+    - essential
+
+- name: Install recommended security tools
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - debsums
+      - apt-show-versions
+      - needrestart
+      - libpam-tmpdir
+      - apt-listchanges
+      - debsecan
+    state: present
+  when: install_recommended_tools | default(true)
+  tags:
+    - security_tools
+    - recommended
+
+- name: Install network security tools
+  ansible.builtin.apt:
+    name:
+      - nftables
+      - tcpdump
+      - net-tools
+    state: present
+  tags:
+    - security_tools
+    - network
+
+- name: Install ClamAV antivirus (optional)
+  ansible.builtin.apt:
+    name:
+      - clamav
+      - clamav-daemon
+      - clamav-freshclam
+    state: present
+  when: install_clamav | default(false)
+  tags:
+    - security_tools
+    - clamav
+
+# =============================================================================
+# AIDE Configuration
+# =============================================================================
+
+- name: Check if AIDE database exists
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db
+  register: aide_db
+  tags:
+    - security_tools
+    - aide
+
+- name: Initialize AIDE database
+  ansible.builtin.command:
+    cmd: aideinit
+  when: not aide_db.stat.exists
+  changed_when: true
+  async: 600
+  poll: 30
+  register: aide_init_result
+  ignore_errors: true
+  tags:
+    - security_tools
+    - aide
+
+- name: Check for AIDE new database
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db.new
+  register: aide_db_new
+  when: not aide_db.stat.exists
+  tags:
+    - security_tools
+    - aide
+
+- name: Move AIDE new database to active
+  ansible.builtin.copy:
+    src: /var/lib/aide/aide.db.new
+    dest: /var/lib/aide/aide.db
+    remote_src: true
+    mode: '0600'
+  when:
+    - not aide_db.stat.exists
+    - aide_db_new.stat.exists | default(false)
+  tags:
+    - security_tools
+    - aide
+
+- name: Create AIDE log directory
+  ansible.builtin.file:
+    path: /var/log/aide
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  tags:
+    - security_tools
+    - aide
+
+- name: Create AIDE daily check cron job
+  ansible.builtin.copy:
+    dest: /etc/cron.daily/aide-check
+    content: |
+      #!/bin/bash
+      # Daily AIDE integrity check
+      /usr/bin/aide --check >> /var/log/aide/aide-check.log 2>&1
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - security_tools
+    - aide
+
+# =============================================================================
+# Rootkit Hunter Configuration
+# =============================================================================
+
+- name: Configure rkhunter
+  ansible.builtin.lineinfile:
+    path: /etc/default/rkhunter
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    create: true
+    mode: '0644'
+  loop:
+    - { regexp: '^CRON_DAILY_RUN=', line: 'CRON_DAILY_RUN="true"' }
+    - { regexp: '^CRON_DB_UPDATE=', line: 'CRON_DB_UPDATE="true"' }
+    - { regexp: '^APT_AUTOGEN=', line: 'APT_AUTOGEN="true"' }
+  tags:
+    - security_tools
+    - rkhunter
+
+- name: Update rkhunter database
+  ansible.builtin.command:
+    cmd: rkhunter --update
+  changed_when: false
+  failed_when: false
+  tags:
+    - security_tools
+    - rkhunter
+
+- name: Update rkhunter properties
+  ansible.builtin.command:
+    cmd: rkhunter --propupd
+  changed_when: true
+  failed_when: false
+  tags:
+    - security_tools
+    - rkhunter
+
+# =============================================================================
+# Fail2Ban Configuration
+# =============================================================================
+
+- name: Create Fail2Ban local configuration
+  ansible.builtin.template:
+    src: fail2ban_jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: '0644'
+  when: install_recommended_tools | default(true)
+  notify: Restart fail2ban
+  tags:
+    - security_tools
+    - fail2ban
+
+- name: Enable and start Fail2Ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started
+  when: install_recommended_tools | default(true)
+  tags:
+    - security_tools
+    - fail2ban
+
+# =============================================================================
+# ClamAV Configuration
+# =============================================================================
+
+- name: Update ClamAV database
+  ansible.builtin.command:
+    cmd: freshclam
+  when: install_clamav | default(false)
+  changed_when: true
+  failed_when: false
+  tags:
+    - security_tools
+    - clamav
+
+- name: Enable ClamAV services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - clamav-freshclam
+  when: install_clamav | default(false)
+  tags:
+    - security_tools
+    - clamav
+
+- name: Create weekly ClamAV scan cron job
+  ansible.builtin.copy:
+    dest: /etc/cron.weekly/clamav-scan
+    content: |
+      #!/bin/bash
+      # Weekly ClamAV scan
+      LOGFILE="/var/log/clamav/weekly-scan.log"
+      mkdir -p /var/log/clamav
+      echo "ClamAV Weekly Scan - $(date)" > "$LOGFILE"
+      clamscan -r --infected --exclude-dir="^/sys" --exclude-dir="^/proc" \
+          --exclude-dir="^/dev" --exclude-dir="^/run" / >> "$LOGFILE" 2>&1
+    owner: root
+    group: root
+    mode: '0755'
+  when: install_clamav | default(false)
+  tags:
+    - security_tools
+    - clamav
+
+# =============================================================================
+# Debsums Configuration
+# =============================================================================
+
+- name: Create weekly debsums check cron job
+  ansible.builtin.copy:
+    dest: /etc/cron.weekly/debsums-check
+    content: |
+      #!/bin/bash
+      # Weekly package verification
+      LOGFILE="/var/log/debsums-weekly.log"
+      echo "Package Verification - $(date)" > "$LOGFILE"
+      debsums -s >> "$LOGFILE" 2>&1
+    owner: root
+    group: root
+    mode: '0755'
+  when: install_recommended_tools | default(true)
+  tags:
+    - security_tools
+    - debsums
+
+- name: Display security tools installation complete
+  ansible.builtin.debug:
+    msg: "Security tools installation complete"
+  tags:
+    - security_tools
+

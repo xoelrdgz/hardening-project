@@ -1,0 +1,85 @@
+---
+# =============================================================================
+# Section 5.4: User Authentication
+# =============================================================================
+# Controls:
+# - 5.4.1.4: Ensure strong password hashing algorithm
+# - 5.4.1.5: Ensure inactive password lock is configured
+# - 5.4.2.1: Ensure root is the only UID 0 account
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 5.4.1.4 - Password Hashing Algorithm
+# -----------------------------------------------------------------------------
+
+- name: 5.4.1.4 | Configure password hashing algorithm in login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^ENCRYPT_METHOD'
+    line: "ENCRYPT_METHOD {{ cis_password_hash_algorithm }}"
+    state: present
+    backup: true
+
+- name: 5.4.1.4 | Verify PAM uses secure hashing (info only)
+  ansible.builtin.debug:
+    msg: "PAM hash algorithm is configured via /etc/login.defs ENCRYPT_METHOD. Ubuntu 24.04 uses yescrypt by default."
+  when: ansible_facts['os_family'] == 'Debian'
+
+# -----------------------------------------------------------------------------
+# 5.4.1.5 - Inactive Password Lock
+# -----------------------------------------------------------------------------
+
+- name: 5.4.1.5 | Set default INACTIVE for new users
+  ansible.builtin.command:
+    cmd: "useradd -D -f {{ cis_inactive_password_lock_days }}"
+  register: useradd_default_result
+  changed_when: useradd_default_result.rc == 0
+  failed_when: false
+
+- name: 5.4.1.5 | Get current INACTIVE default
+  ansible.builtin.command:
+    cmd: useradd -D
+  register: useradd_default_check
+  changed_when: false
+  failed_when: false
+
+- name: 5.4.1.5 | Find users with non-compliant INACTIVE
+  ansible.builtin.shell:
+    cmd: |
+      awk -F: '($2~/^\$.+\$/) {if($7 > {{ cis_inactive_password_lock_days }} || $7 < 0) print $1}' /etc/shadow
+  register: non_compliant_users
+  changed_when: false
+  failed_when: false
+
+- name: 5.4.1.5 | Set INACTIVE for non-compliant users
+  ansible.builtin.command:
+    cmd: "chage --inactive {{ cis_inactive_password_lock_days }} {{ item }}"
+  loop: "{{ non_compliant_users.stdout_lines }}"
+  when: non_compliant_users.stdout_lines | length > 0
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# 5.4.2.1 - Root is Only UID 0 Account
+# -----------------------------------------------------------------------------
+
+- name: 5.4.2.1 | Find accounts with UID 0
+  ansible.builtin.shell:
+    cmd: awk -F':' '($3 == 0 && $1 != "root") { print $1 }' /etc/passwd
+  register: uid0_accounts
+  changed_when: false
+  failed_when: false
+
+- name: 5.4.2.1 | Alert on non-root UID 0 accounts
+  ansible.builtin.fail:
+    msg: |
+      SECURITY ALERT: Non-root accounts with UID 0 detected!
+      Accounts: {{ uid0_accounts.stdout_lines | join(', ') }}
+      
+      This requires manual intervention. Each account must be:
+      1. Reviewed for legitimacy
+      2. Assigned a new UID using: usermod -u <new_uid> <username>
+      
+      To skip this check, set cis_skip_uid0_check: true
+  when:
+    - uid0_accounts.stdout_lines | length > 0
+    - not (cis_skip_uid0_check | default(false))

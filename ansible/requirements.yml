@@ -1,0 +1,15 @@
+---
+# =============================================================================
+# Ansible Requirements
+# =============================================================================
+# Install with: ansible-galaxy collection install -r requirements.yml
+# =============================================================================
+
+collections:
+  # POSIX collection for mount, sysctl, etc.
+  - name: ansible.posix
+    version: ">=1.5.0"
+  
+  # Community general for pam_limits, modprobe, etc.
+  - name: community.general
+    version: ">=7.0.0"

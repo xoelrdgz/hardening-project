@@ -1,0 +1,46 @@
+---
+# =============================================================================
+# Level 2 Profile Variables
+# =============================================================================
+# CIS Level 2 provides advanced security for high-security environments.
+# These controls may impact system availability and functionality.
+#
+# WARNING: Level 2 includes controls that:
+# - May require system reboots
+# - Can lock system configuration (audit immutable)
+# - Require thorough testing before production deployment
+# =============================================================================
+
+cis_level: 2
+
+# Include all Level 1 controls
+# Level 2 is additive to Level 1
+
+# -----------------------------------------------------------------------------
+# Level 2 Specific Controls
+# -----------------------------------------------------------------------------
+
+# 1.3.1.4 - Enforce all AppArmor profiles
+cis_apparmor_enforce_all: true
+
+# 6.2.3.20 - Audit immutable mode
+# CRITICAL: Once enabled, audit rules cannot be changed without reboot!
+# Only enable after thorough testing of audit rules
+cis_audit_immutable: true
+
+# Safety checks for immutable mode
+cis_audit_immutable_safety_checks: true
+cis_audit_min_disk_free_percent: 25  # Higher threshold for L2
+
+# More restrictive ptrace scope for Level 2
+cis_sysctl_settings:
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 2  # admin-only (more restrictive than L1)
+  fs.suid_dumpable: 0
+
+# Stricter auditd settings
+cis_auditd_disk_full_action: "halt"
+cis_auditd_disk_error_action: "halt"
+
+# Additional audit rules for Level 2
+cis_audit_rules_level2_enabled: true

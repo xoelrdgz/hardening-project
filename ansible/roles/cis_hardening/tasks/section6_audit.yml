@@ -1,0 +1,226 @@
+---
+# =============================================================================
+# Section 6.2: Auditing (auditd)
+# =============================================================================
+# Controls:
+# - 6.2.1.2: Ensure auditd service is enabled and active
+# - 6.2.2.3: Ensure system is disabled when audit logs are full
+# - 6.2.3.4: Audit date/time modification events
+# - 6.2.3.8: Audit user/group modification events
+# - 6.2.3.10: Audit successful mounts
+# - 6.2.3.17: Audit chacl command usage
+# - 6.2.3.20: Ensure audit configuration is immutable (Level 2)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Prerequisites
+# -----------------------------------------------------------------------------
+
+- name: 6.2.x | Install auditd packages
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+    update_cache: true
+  when: cis_auditd_enabled
+
+# -----------------------------------------------------------------------------
+# 6.2.1.2 - Enable auditd Service
+# -----------------------------------------------------------------------------
+
+- name: 6.2.1.2 | Unmask auditd service
+  ansible.builtin.systemd:
+    name: auditd
+    masked: false
+  when: cis_auditd_enabled
+
+- name: 6.2.1.2 | Enable and start auditd service
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: true
+    state: started
+  when: cis_auditd_enabled
+
+# -----------------------------------------------------------------------------
+# 6.2.2.3 - Disk Full/Error Actions
+# -----------------------------------------------------------------------------
+
+- name: 6.2.2.3 | Configure disk_full_action
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^disk_full_action'
+    line: "disk_full_action = {{ cis_auditd_disk_full_action }}"
+    backup: true
+  when: cis_auditd_enabled
+  notify: restart auditd
+
+- name: 6.2.2.3 | Configure disk_error_action
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^disk_error_action'
+    line: "disk_error_action = {{ cis_auditd_disk_error_action }}"
+  when: cis_auditd_enabled
+  notify: restart auditd
+
+# -----------------------------------------------------------------------------
+# 6.2.3.x - Audit Rules
+# -----------------------------------------------------------------------------
+
+- name: 6.2.3.x | Get UID_MIN from login.defs
+  ansible.builtin.shell:
+    cmd: awk '/^\s*UID_MIN/{print $2}' /etc/login.defs
+  register: uid_min_result
+  changed_when: false
+  failed_when: false
+
+- name: 6.2.3.x | Set UID_MIN fact
+  ansible.builtin.set_fact:
+    cis_uid_min: "{{ uid_min_result.stdout | default('1000') }}"
+
+- name: 6.2.3.4 | Deploy time-change audit rules
+  ansible.builtin.template:
+    src: audit_rules/50-time-change.rules.j2
+    dest: /etc/audit/rules.d/50-time-change.rules
+    owner: root
+    group: root
+    mode: '0640'
+  when: cis_audit_rules_enabled
+  notify: reload audit rules
+
+- name: 6.2.3.8 | Deploy identity audit rules
+  ansible.builtin.template:
+    src: audit_rules/50-identity.rules.j2
+    dest: /etc/audit/rules.d/50-identity.rules
+    owner: root
+    group: root
+    mode: '0640'
+  when: cis_audit_rules_enabled
+  notify: reload audit rules
+
+- name: 6.2.3.10 | Deploy mounts audit rules
+  ansible.builtin.template:
+    src: audit_rules/50-mounts.rules.j2
+    dest: /etc/audit/rules.d/50-mounts.rules
+    owner: root
+    group: root
+    mode: '0640'
+  when: cis_audit_rules_enabled
+  notify: reload audit rules
+
+- name: 6.2.3.17 | Deploy permission change audit rules
+  ansible.builtin.template:
+    src: audit_rules/50-perm_chng.rules.j2
+    dest: /etc/audit/rules.d/50-perm_chng.rules
+    owner: root
+    group: root
+    mode: '0640'
+  when: cis_audit_rules_enabled
+  notify: reload audit rules
+
+# -----------------------------------------------------------------------------
+# 6.2.3.20 - Audit Immutable (Level 2 - DANGEROUS)
+# -----------------------------------------------------------------------------
+
+# Flush handlers to ensure audit rules are loaded before checking
+- name: 6.2.3.20 | Flush handlers to load audit rules
+  ansible.builtin.meta: flush_handlers
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+
+# Force reload audit rules before safety check
+- name: 6.2.3.20 | Force reload audit rules before immutable check
+  ansible.builtin.command:
+    cmd: augenrules --load
+  register: audit_force_reload
+  changed_when: false
+  failed_when: false
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Safety check - Verify disk space
+  ansible.builtin.shell:
+    cmd: |
+      # Try /var/log/audit first, fall back to /var/log
+      if df /var/log/audit >/dev/null 2>&1; then
+        df /var/log/audit | awk 'NR==2 {gsub(/%/,""); print 100 - $5}'
+      else
+        df /var/log | awk 'NR==2 {gsub(/%/,""); print 100 - $5}'
+      fi
+  register: disk_free_check
+  changed_when: false
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Display disk space check result
+  ansible.builtin.debug:
+    msg: "Disk free space: {{ disk_free_check.stdout | default('unknown') }}% (required: {{ cis_audit_min_disk_free_percent }}%)"
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Safety check - Validate disk space
+  ansible.builtin.assert:
+    that:
+      - disk_free_check.stdout | int >= cis_audit_min_disk_free_percent | int
+    fail_msg: |
+      AUDIT IMMUTABLE BLOCKED - Insufficient disk space!
+      
+      Free space: {{ disk_free_check.stdout }}%
+      Required: {{ cis_audit_min_disk_free_percent }}%
+      
+      Enabling immutable mode with low disk space is extremely dangerous.
+      If audit logs fill the disk, you cannot modify rules without a reboot.
+      
+      To override (NOT RECOMMENDED):
+        Set cis_audit_immutable_safety_checks: false
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Safety check - Verify audit rules are loaded
+  ansible.builtin.command:
+    cmd: auditctl -l
+  register: audit_rules_loaded
+  changed_when: false
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Safety check - Validate sufficient rules loaded
+  ansible.builtin.assert:
+    that:
+      - audit_rules_loaded.stdout_lines | length >= 5
+    fail_msg: |
+      AUDIT IMMUTABLE BLOCKED - Insufficient audit rules loaded!
+      
+      Loaded rules: {{ audit_rules_loaded.stdout_lines | length }}
+      
+      Before enabling immutable mode, ensure all required audit rules
+      are properly loaded and tested.
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+    - cis_audit_immutable_safety_checks
+
+- name: 6.2.3.20 | Deploy audit finalize rules (immutable)
+  ansible.builtin.template:
+    src: audit_rules/99-finalize.rules.j2
+    dest: /etc/audit/rules.d/99-finalize.rules
+    owner: root
+    group: root
+    mode: '0640'
+  when:
+    - cis_level | int >= 2
+    - cis_audit_immutable
+  notify:
+    - reload audit rules
+    - notify reboot required

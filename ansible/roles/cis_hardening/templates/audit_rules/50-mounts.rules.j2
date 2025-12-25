@@ -1,0 +1,13 @@
+# =============================================================================
+# CIS Control 6.2.3.10 - Audit successful file system mounts
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# UID_MIN: {{ cis_uid_min }}
+# =============================================================================
+
+# Monitor mount syscall - 32-bit
+-a always,exit -F arch=b32 -S mount -F auid>={{ cis_uid_min }} -F auid!=unset -k mounts
+
+# Monitor mount syscall - 64-bit
+-a always,exit -F arch=b64 -S mount -F auid>={{ cis_uid_min }} -F auid!=unset -k mounts

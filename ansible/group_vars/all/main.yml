@@ -1,0 +1,16 @@
+---
+# =============================================================================
+# Global Variables for All Hosts
+# =============================================================================
+# These variables apply to all hosts in the inventory.
+# Override in group-specific or host-specific vars as needed.
+# =============================================================================
+
+# Default CIS Level (can be overridden per host/group)
+cis_level: 1
+
+# Generate compliance report after run
+cis_generate_report: true
+
+# Timezone configuration
+system_timezone: "UTC"

@@ -1,0 +1,116 @@
+---
+# =============================================================================
+# Additional Service Controls (Best Practices)
+# =============================================================================
+# Controls:
+# - Ensure avahi-daemon is disabled
+# - Ensure cups is disabled
+# - Ensure bluetooth is disabled
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Disable avahi-daemon (mDNS/DNS-SD)
+# -----------------------------------------------------------------------------
+
+- name: Services | Check if avahi-daemon is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -s avahi-daemon
+  register: avahi_installed
+  changed_when: false
+  failed_when: false
+
+- name: Services | Stop and disable avahi-daemon
+  ansible.builtin.systemd:
+    name: avahi-daemon
+    state: stopped
+    enabled: false
+  when:
+    - avahi_installed.rc == 0
+    - cis_disable_avahi | default(true)
+  failed_when: false
+
+- name: Services | Mask avahi-daemon
+  ansible.builtin.systemd:
+    name: avahi-daemon
+    masked: true
+  when:
+    - avahi_installed.rc == 0
+    - cis_disable_avahi | default(true)
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Disable CUPS (Printing)
+# -----------------------------------------------------------------------------
+
+- name: Services | Check if cups is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -s cups
+  register: cups_installed
+  changed_when: false
+  failed_when: false
+
+- name: Services | Stop and disable cups
+  ansible.builtin.systemd:
+    name: cups
+    state: stopped
+    enabled: false
+  when:
+    - cups_installed.rc == 0
+    - cis_disable_cups | default(true)
+  failed_when: false
+
+- name: Services | Mask cups
+  ansible.builtin.systemd:
+    name: cups
+    masked: true
+  when:
+    - cups_installed.rc == 0
+    - cis_disable_cups | default(true)
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Disable Bluetooth
+# -----------------------------------------------------------------------------
+
+- name: Services | Check if bluetooth service exists
+  ansible.builtin.command:
+    cmd: systemctl list-unit-files bluetooth.service
+  register: bluetooth_service
+  changed_when: false
+  failed_when: false
+
+- name: Services | Stop and disable bluetooth
+  ansible.builtin.systemd:
+    name: bluetooth
+    state: stopped
+    enabled: false
+  when:
+    - "'bluetooth.service' in bluetooth_service.stdout"
+    - cis_disable_bluetooth | default(true)
+  failed_when: false
+
+- name: Services | Mask bluetooth
+  ansible.builtin.systemd:
+    name: bluetooth
+    masked: true
+  when:
+    - "'bluetooth.service' in bluetooth_service.stdout"
+    - cis_disable_bluetooth | default(true)
+  failed_when: false
+
+- name: Services | Blacklist bluetooth kernel modules
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/cis-bluetooth.conf
+    line: "{{ item }}"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  loop:
+    - "# CIS - Disable Bluetooth"
+    - "install bluetooth /bin/false"
+    - "blacklist bluetooth"
+    - "install btusb /bin/false"
+    - "blacklist btusb"
+  when: cis_disable_bluetooth | default(true)
+  notify: update initramfs

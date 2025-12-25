@@ -1,0 +1,61 @@
+---
+# =============================================================================
+# Section 6.3: File Integrity (AIDE)
+# =============================================================================
+# Controls:
+# - 6.3.1: Ensure AIDE is installed
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 6.3.1 - AIDE Installation
+# -----------------------------------------------------------------------------
+
+- name: 6.3.1 | Install AIDE packages
+  ansible.builtin.apt:
+    name:
+      - aide
+      - aide-common
+    state: present
+    update_cache: true
+  when: cis_aide_enabled
+
+- name: 6.3.1 | Check if AIDE database exists
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db
+  register: aide_db_stat
+  when: cis_aide_enabled
+
+- name: 6.3.1 | Check if AIDE database (compressed) exists
+  ansible.builtin.stat:
+    path: /var/lib/aide/aide.db.gz
+  register: aide_db_gz_stat
+  when: cis_aide_enabled
+
+- name: 6.3.1 | Initialize AIDE database
+  ansible.builtin.command:
+    cmd: aideinit --yes --force
+  when:
+    - cis_aide_enabled
+    - cis_aide_initialize_db
+    - not aide_db_stat.stat.exists
+    - not aide_db_gz_stat.stat.exists
+  async: 3600  # Allow up to 1 hour for AIDE initialization
+  poll: 30
+  register: aide_init_result
+
+- name: 6.3.1 | Move new AIDE database to active
+  ansible.builtin.command:
+    cmd: mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
+  when:
+    - cis_aide_enabled
+    - aide_init_result is changed
+  failed_when: false
+
+- name: 6.3.1 | Configure daily AIDE check cron job
+  ansible.builtin.cron:
+    name: "AIDE daily integrity check"
+    job: "/usr/bin/aide --check --config /etc/aide/aide.conf 2>&1 | /usr/bin/mail -s 'AIDE Integrity Check - {{ inventory_hostname }}' root"
+    special_time: daily
+    user: root
+    state: "{{ 'present' if cis_aide_cron_enabled else 'absent' }}"
+  when: cis_aide_enabled

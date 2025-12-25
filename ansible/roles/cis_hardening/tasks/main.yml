@@ -1,0 +1,247 @@
+---
+# =============================================================================
+# Main Tasks for CIS Hardening Role
+# Version: 2.0.0
+# =============================================================================
+# This file orchestrates all hardening tasks by including sub-task files
+# organized by CIS section, plus additional security tools and Lynis
+# improvements for comprehensive hardening.
+# =============================================================================
+
+- name: Include level-specific variables
+  ansible.builtin.include_vars:
+    file: "level{{ cis_level }}.yml"
+  tags: always
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: /var/log/cis-hardening
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  tags: always
+
+- name: Log hardening start
+  ansible.builtin.lineinfile:
+    path: /var/log/cis-hardening/ansible-runs.log
+    line: "{{ ansible_date_time.iso8601 }} - CIS Level {{ cis_level }} hardening started"
+    create: true
+    mode: '0640'
+  tags: always
+
+# -----------------------------------------------------------------------------
+# Section 0: Security Tools Installation (Pre-requisites)
+# -----------------------------------------------------------------------------
+
+- name: Include security tools installation tasks
+  ansible.builtin.include_tasks:
+    file: section0_security_tools.yml
+  when: install_security_tools | default(true)
+  tags:
+    - section0
+    - security_tools
+    - lynis
+    - aide
+    - rkhunter
+
+# -----------------------------------------------------------------------------
+# Section 1: Initial Setup
+# -----------------------------------------------------------------------------
+
+- name: Include filesystem hardening tasks
+  ansible.builtin.include_tasks:
+    file: section1_filesystem.yml
+  tags:
+    - section1
+    - filesystem
+
+- name: Include banner configuration tasks
+  ansible.builtin.include_tasks:
+    file: section1_banners.yml
+  tags:
+    - section1
+    - banners
+    - motd
+
+- name: Include AppArmor tasks
+  ansible.builtin.include_tasks:
+    file: section1_apparmor.yml
+  tags:
+    - section1
+    - apparmor
+    - mac
+
+- name: Include bootloader tasks
+  ansible.builtin.include_tasks:
+    file: section1_bootloader.yml
+  tags:
+    - section1
+    - bootloader
+    - grub
+
+- name: Include kernel hardening tasks
+  ansible.builtin.include_tasks:
+    file: section1_kernel.yml
+  tags:
+    - section1
+    - kernel
+    - sysctl
+
+# -----------------------------------------------------------------------------
+# Section 2: Services Configuration
+# -----------------------------------------------------------------------------
+
+- name: Include services configuration tasks
+  ansible.builtin.include_tasks:
+    file: section2_services.yml
+  tags:
+    - section2
+    - services
+
+- name: Include additional services hardening
+  ansible.builtin.include_tasks:
+    file: section2_additional_services.yml
+  tags:
+    - section2
+    - services
+
+# -----------------------------------------------------------------------------
+# Section 3: Network Configuration
+# -----------------------------------------------------------------------------
+
+- name: Include wireless hardening tasks
+  ansible.builtin.include_tasks:
+    file: section3_wireless.yml
+  tags:
+    - section3
+    - network
+    - wireless
+
+- name: Include network hardening tasks
+  ansible.builtin.include_tasks:
+    file: section3_network.yml
+  tags:
+    - section3
+    - network
+    - sysctl
+
+# -----------------------------------------------------------------------------
+# Section 4: Firewall Configuration
+# -----------------------------------------------------------------------------
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks:
+    file: section4_firewall.yml
+  tags:
+    - section4
+    - firewall
+    - nftables
+
+# -----------------------------------------------------------------------------
+# Section 5: Access, Authentication and Authorization
+# -----------------------------------------------------------------------------
+
+- name: Include SSH hardening tasks
+  ansible.builtin.include_tasks:
+    file: section5_ssh.yml
+  tags:
+    - section5
+    - ssh
+    - sshd
+
+- name: Include PAM and sudo hardening tasks
+  ansible.builtin.include_tasks:
+    file: section5_pam_sudo.yml
+  tags:
+    - section5
+    - pam
+    - sudo
+
+- name: Include authentication tasks
+  ansible.builtin.include_tasks:
+    file: section5_authentication.yml
+  tags:
+    - section5
+    - authentication
+    - pam
+
+# -----------------------------------------------------------------------------
+# Section 6: Logging and Auditing
+# -----------------------------------------------------------------------------
+
+- name: Include logging tasks (rsyslog)
+  ansible.builtin.include_tasks:
+    file: section6_logging.yml
+  tags:
+    - section6
+    - logging
+    - rsyslog
+
+- name: Include audit tasks (auditd)
+  ansible.builtin.include_tasks:
+    file: section6_audit.yml
+  tags:
+    - section6
+    - audit
+    - auditd
+
+- name: Include file integrity tasks (AIDE)
+  ansible.builtin.include_tasks:
+    file: section6_aide.yml
+  tags:
+    - section6
+    - aide
+    - integrity
+
+# -----------------------------------------------------------------------------
+# Lynis Score Improvements (Additional Hardening)
+# -----------------------------------------------------------------------------
+
+- name: Include Lynis score improvement tasks
+  ansible.builtin.include_tasks:
+    file: section0_lynis_improvements.yml
+  when: apply_lynis_improvements | default(true)
+  tags:
+    - lynis_improvements
+    - lynis
+    - hardening
+
+# -----------------------------------------------------------------------------
+# Finalization
+# -----------------------------------------------------------------------------
+
+- name: Generate compliance report
+  ansible.builtin.template:
+    src: compliance_report.j2
+    dest: "/var/log/cis-hardening/compliance-report-{{ ansible_date_time.date }}.txt"
+    mode: '0640'
+  tags:
+    - report
+    - always
+
+- name: Log hardening completion
+  ansible.builtin.lineinfile:
+    path: /var/log/cis-hardening/ansible-runs.log
+    line: "{{ ansible_date_time.iso8601 }} - CIS Level {{ cis_level }} hardening completed"
+    create: true
+    mode: '0640'
+  tags: always
+
+- name: Display completion message
+  ansible.builtin.debug:
+    msg: |
+      
+      ============================================================
+      CIS Ubuntu Server 24.04 LTS Hardening Complete
+      ============================================================
+      Level: {{ cis_level }}
+      Security Tools: {{ 'Installed' if install_security_tools | default(true) else 'Skipped' }}
+      Lynis Improvements: {{ 'Applied' if apply_lynis_improvements | default(true) else 'Skipped' }}
+      
+      Next Steps:
+        1. Review: /var/log/cis-hardening/
+        2. Run: lynis audit system
+        3. Reboot to apply all changes
+      ============================================================
+  tags: always

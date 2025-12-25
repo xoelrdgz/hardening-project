@@ -1,0 +1,20 @@
+# =============================================================================
+# CIS Network Hardening - Sysctl Configuration
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# CIS Level: {{ cis_level }}
+# =============================================================================
+# Controls:
+# - 3.3.1: net.ipv4.ip_forward, net.ipv6.conf.all.forwarding
+# - 3.3.2: net.ipv4.conf.all.send_redirects, net.ipv4.conf.default.send_redirects
+# - 3.3.3: net.ipv4.conf.*.accept_redirects, net.ipv6.conf.*.accept_redirects
+# - 3.3.4: net.ipv4.icmp_echo_ignore_broadcasts
+# - 3.3.9: net.ipv4.tcp_syncookies
+# =============================================================================
+
+{% for key, value in cis_network_sysctl_settings.items() %}
+# {{ key }}
+{{ key }} = {{ value }}
+
+{% endfor %}

@@ -1,0 +1,28 @@
+---
+# =============================================================================
+# Role Metadata
+# =============================================================================
+
+galaxy_info:
+  role_name: cis_hardening
+  author: xoelrdgz
+  description: CIS Benchmark hardening for Ubuntu Server 24.04 LTS
+
+  license: MIT
+
+  min_ansible_version: "2.14"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble  # 24.04 LTS
+
+  galaxy_tags:
+    - security
+    - hardening
+    - cis
+    - compliance
+    - ubuntu
+    - linux
+
+dependencies: []

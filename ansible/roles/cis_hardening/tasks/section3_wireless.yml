@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# Section 3.1: Network Configuration - Wireless
+# =============================================================================
+# Controls:
+# - 3.1.2: Ensure wireless interfaces are disabled
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 3.1.2 - Disable Wireless Interfaces
+# -----------------------------------------------------------------------------
+
+- name: 3.1.2 | Check for wireless interfaces
+  ansible.builtin.shell:
+    cmd: |
+      if command -v nmcli &>/dev/null; then
+        nmcli radio wifi 2>/dev/null || echo "unknown"
+      else
+        find /sys/class/net/*/wireless -maxdepth 0 2>/dev/null | wc -l
+      fi
+  register: wireless_check
+  changed_when: false
+  failed_when: false
+
+- name: 3.1.2 | Disable wireless using NetworkManager
+  ansible.builtin.command:
+    cmd: nmcli radio wifi off
+  when:
+    - cis_disable_wireless | default(true)
+    - "'enabled' in wireless_check.stdout"
+  changed_when: true
+  failed_when: false
+
+- name: 3.1.2 | Disable wireless using rfkill
+  ansible.builtin.command:
+    cmd: rfkill block wifi
+  when:
+    - cis_disable_wireless | default(true)
+  changed_when: false
+  failed_when: false
+
+- name: 3.1.2 | Blacklist wireless kernel modules
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/cis-wireless.conf
+    line: "{{ item }}"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  loop:
+    - "# CIS 3.1.2 - Disable wireless interfaces"
+    - "install cfg80211 /bin/false"
+    - "blacklist cfg80211"
+    - "install mac80211 /bin/false"
+    - "blacklist mac80211"
+  when: cis_disable_wireless | default(true)
+  notify: update initramfs

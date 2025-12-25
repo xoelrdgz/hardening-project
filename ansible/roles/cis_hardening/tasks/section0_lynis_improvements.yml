@@ -1,0 +1,310 @@
+---
+# =============================================================================
+# CIS Ubuntu Server 24.04 LTS - Lynis Score Improvements
+# Version: 1.0.0
+# Author: xoelrdgz
+#
+# This file implements additional hardening measures recommended by Lynis
+# that improve overall security posture beyond core CIS benchmarks.
+# =============================================================================
+
+- name: Display Lynis improvements section header
+  ansible.builtin.debug:
+    msg: "========== Applying Lynis Score Improvements =========="
+  tags:
+    - lynis_improvements
+
+# =============================================================================
+# Additional Kernel Hardening
+# =============================================================================
+
+- name: Apply Lynis recommended kernel parameters
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-lynis-hardening.conf
+    reload: true
+  loop:
+    # Memory Protection
+    - { name: 'kernel.dmesg_restrict', value: '1' }
+    - { name: 'kernel.kptr_restrict', value: '2' }
+    - { name: 'kernel.perf_event_paranoid', value: '3' }
+    - { name: 'kernel.sysrq', value: '0' }
+    - { name: 'kernel.unprivileged_bpf_disabled', value: '1' }
+    - { name: 'vm.unprivileged_userfaultfd', value: '0' }
+    # Network Hardening
+    - { name: 'net.ipv6.conf.all.accept_ra', value: '0' }
+    - { name: 'net.ipv6.conf.default.accept_ra', value: '0' }
+    - { name: 'net.ipv4.tcp_rfc1337', value: '1' }
+    - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+    # Filesystem Hardening
+    - { name: 'fs.protected_hardlinks', value: '1' }
+    - { name: 'fs.protected_symlinks', value: '1' }
+    - { name: 'fs.protected_fifos', value: '2' }
+    - { name: 'fs.protected_regular', value: '2' }
+  ignore_errors: true
+  tags:
+    - lynis_improvements
+    - kernel
+
+# =============================================================================
+# Disable Uncommon Network Protocols
+# =============================================================================
+
+- name: Disable DCCP protocol
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/dccp.conf
+    content: |
+      install dccp /bin/true
+      blacklist dccp
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - network
+
+- name: Disable SCTP protocol
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/sctp.conf
+    content: |
+      install sctp /bin/true
+      blacklist sctp
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - network
+
+- name: Disable RDS protocol
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/rds.conf
+    content: |
+      install rds /bin/true
+      blacklist rds
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - network
+
+- name: Disable TIPC protocol
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/tipc.conf
+    content: |
+      install tipc /bin/true
+      blacklist tipc
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - network
+
+# =============================================================================
+# File Permission Hardening
+# =============================================================================
+
+- name: Secure cron directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0700'
+  loop:
+    - /etc/cron.hourly
+    - /etc/cron.daily
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+    - /etc/cron.d
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Secure crontab file
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: '0600'
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Remove at.deny if exists
+  ansible.builtin.file:
+    path: /etc/at.deny
+    state: absent
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Create restrictive at.allow
+  ansible.builtin.file:
+    path: /etc/at.allow
+    state: touch
+    owner: root
+    group: root
+    mode: '0640'
+    modification_time: preserve
+    access_time: preserve
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Remove cron.deny if exists
+  ansible.builtin.file:
+    path: /etc/cron.deny
+    state: absent
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Create restrictive cron.allow
+  ansible.builtin.file:
+    path: /etc/cron.allow
+    state: touch
+    owner: root
+    group: root
+    mode: '0640'
+    modification_time: preserve
+    access_time: preserve
+  tags:
+    - lynis_improvements
+    - permissions
+
+- name: Set restrictive UMASK in login.defs
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^UMASK'
+    line: 'UMASK 027'
+    state: present
+  tags:
+    - lynis_improvements
+    - permissions
+
+# =============================================================================
+# Disable Unnecessary Services
+# =============================================================================
+
+- name: Disable unnecessary services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - avahi-daemon
+    - cups
+    - cups-browsed
+    - bluetooth
+  failed_when: false
+  tags:
+    - lynis_improvements
+    - services
+
+# =============================================================================
+# Security Banners
+# =============================================================================
+
+- name: Create warning banner for /etc/issue
+  ansible.builtin.copy:
+    dest: /etc/issue
+    content: |
+      ================================================================================
+                                AUTHORIZED ACCESS ONLY
+      ================================================================================
+      
+      This system is the property of the organization. Unauthorized access is 
+      prohibited and may be subject to legal action.
+      
+      All activities on this system are monitored and logged.
+      
+      ================================================================================
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - banners
+
+- name: Create warning banner for /etc/issue.net
+  ansible.builtin.copy:
+    dest: /etc/issue.net
+    content: |
+      ================================================================================
+                                AUTHORIZED ACCESS ONLY
+      ================================================================================
+      
+      This system is the property of the organization. Unauthorized access is 
+      prohibited and may be subject to legal action.
+      
+      All activities on this system are monitored and logged.
+      
+      ================================================================================
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - banners
+
+- name: Disable motd scripts that reveal system info
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: '0644'
+  loop:
+    - /etc/update-motd.d/10-help-text
+    - /etc/update-motd.d/50-motd-news
+  failed_when: false
+  tags:
+    - lynis_improvements
+    - banners
+
+# =============================================================================
+# Shell Timeout
+# =============================================================================
+
+- name: Configure shell timeout
+  ansible.builtin.copy:
+    dest: /etc/profile.d/timeout.sh
+    content: |
+      # Automatic logout after 15 minutes of inactivity
+      readonly TMOUT=900
+      export TMOUT
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - lynis_improvements
+    - shell
+
+# =============================================================================
+# Compiler Removal (Optional)
+# =============================================================================
+
+- name: Remove compilers and build tools
+  ansible.builtin.apt:
+    name:
+      - gcc
+      - g++
+      - cpp
+      - make
+      - build-essential
+      - dpkg-dev
+    state: absent
+    purge: true
+    autoremove: true
+  when: remove_compilers | default(false)
+  tags:
+    - lynis_improvements
+    - compilers
+
+- name: Display Lynis improvements complete
+  ansible.builtin.debug:
+    msg: "Lynis score improvements applied successfully"
+  tags:
+    - lynis_improvements
+

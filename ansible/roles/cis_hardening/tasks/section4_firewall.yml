@@ -1,0 +1,68 @@
+---
+# =============================================================================
+# Section 4.3: Firewall Configuration (nftables)
+# =============================================================================
+# Controls:
+# - 4.3.1:  Ensure nftables is installed
+# - 4.3.4:  Ensure nftables table exists
+# - 4.3.5:  Ensure nftables base chains exist
+# - 4.3.6:  Ensure nftables loopback traffic is configured
+# - 4.3.8:  Ensure nftables default deny policy
+# - 4.3.9:  Ensure nftables service is enabled
+# - 4.3.10: Ensure nftables rules are permanent
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 4.3.1 - Install nftables
+# -----------------------------------------------------------------------------
+
+- name: 4.3.1 | Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+  when: cis_nftables_enabled | default(true)
+
+# -----------------------------------------------------------------------------
+# 4.3.4/5/6/8 - Configure nftables Rules
+# -----------------------------------------------------------------------------
+
+- name: 4.3.x | Deploy nftables configuration
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: '0600'
+    backup: true
+    validate: 'nft -c -f %s'
+  when: cis_nftables_enabled | default(true)
+  notify: reload nftables
+
+# -----------------------------------------------------------------------------
+# 4.3.9 - Enable nftables Service
+# -----------------------------------------------------------------------------
+
+- name: 4.3.9 | Enable nftables service
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
+  when: cis_nftables_enabled | default(true)
+
+# -----------------------------------------------------------------------------
+# 4.3.10 - Verify Rules Are Permanent
+# -----------------------------------------------------------------------------
+
+- name: 4.3.10 | Verify nftables rules are persistent
+  ansible.builtin.stat:
+    path: /etc/nftables.conf
+  register: nftables_conf
+  when: cis_nftables_enabled | default(true)
+
+- name: 4.3.10 | Log nftables persistence status
+  ansible.builtin.debug:
+    msg: "nftables rules are persistent in /etc/nftables.conf"
+  when:
+    - cis_nftables_enabled | default(true)
+    - nftables_conf.stat.exists

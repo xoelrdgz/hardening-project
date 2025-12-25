@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# Section 3.3: Network Parameters (Host Only)
+# =============================================================================
+# Controls:
+# - 3.3.1: Ensure IP forwarding is disabled
+# - 3.3.2: Ensure packet redirect sending is disabled
+# - 3.3.3: Ensure ICMP redirects are not accepted
+# - 3.3.4: Ensure broadcast ICMP requests are ignored
+# - 3.3.9: Ensure TCP SYN cookies is enabled
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Network Sysctl Configuration (3.3.x)
+# -----------------------------------------------------------------------------
+
+- name: 3.3.x | Deploy network hardening sysctl configuration
+  ansible.builtin.template:
+    src: sysctl_network.conf.j2
+    dest: /etc/sysctl.d/60-cis-network.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: reload sysctl
+
+- name: 3.3.x | Apply network sysctl parameters immediately
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+    sysctl_file: /etc/sysctl.d/60-cis-network.conf
+  loop: "{{ cis_network_sysctl_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"

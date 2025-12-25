@@ -1,0 +1,217 @@
+---
+# =============================================================================
+# Section 1.1: Filesystem Configuration
+# =============================================================================
+# Controls:
+# - 1.1.1.9:  Disable USB storage kernel module
+# - 1.1.1.10: Disable unused filesystems
+# - 1.1.2.1.1: Ensure /tmp is a separate partition
+# - 1.1.2.1.4: Ensure noexec option on /tmp
+# - 1.1.2.2.4: Ensure noexec option on /dev/shm
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1.1.1.9 - Disable USB Storage Kernel Module
+# -----------------------------------------------------------------------------
+
+- name: 1.1.1.9 | Check if usb-storage module is available
+  ansible.builtin.shell:
+    cmd: |
+      find /lib/modules/*/kernel/drivers/usb/storage -name "*.ko*" 2>/dev/null | head -1
+  register: usb_storage_module
+  changed_when: false
+  failed_when: false
+  when: cis_disable_usb_storage
+
+- name: 1.1.1.9 | Disable usb-storage module loading
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/usb-storage.conf
+    line: "install usb-storage /bin/false"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - cis_disable_usb_storage
+    - usb_storage_module.stdout | length > 0
+  notify: update initramfs
+
+- name: 1.1.1.9 | Blacklist usb-storage module
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/usb-storage.conf
+    line: "blacklist usb-storage"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  when:
+    - cis_disable_usb_storage
+    - usb_storage_module.stdout | length > 0
+  notify: update initramfs
+
+- name: 1.1.1.9 | Unload usb-storage module if loaded
+  community.general.modprobe:
+    name: usb_storage
+    state: absent
+  when: cis_disable_usb_storage
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# 1.1.1.10 - Disable Unused Filesystems
+# -----------------------------------------------------------------------------
+
+- name: 1.1.1.10 | Disable unused filesystem kernel modules
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/cis-filesystems.conf
+    line: "install {{ item }} /bin/false"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  loop: "{{ cis_disabled_filesystems }}"
+  when: cis_disable_unused_filesystems | default(true)
+  notify: update initramfs
+
+- name: 1.1.1.10 | Blacklist unused filesystem kernel modules
+  ansible.builtin.lineinfile:
+    path: /etc/modprobe.d/cis-filesystems.conf
+    line: "blacklist {{ item }}"
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+  loop: "{{ cis_disabled_filesystems }}"
+  when: cis_disable_unused_filesystems | default(true)
+  notify: update initramfs
+
+# -----------------------------------------------------------------------------
+# 1.1.2.1.1 - /tmp Partition Configuration
+# -----------------------------------------------------------------------------
+
+- name: 1.1.2.1.1 | Check current /tmp mount
+  ansible.builtin.command:
+    cmd: findmnt -kn /tmp
+  register: tmp_mount_check
+  changed_when: false
+  failed_when: false
+
+- name: 1.1.2.1.1 | Check if LVM is available
+  ansible.builtin.command:
+    cmd: which lvm
+  register: lvm_available
+  changed_when: false
+  failed_when: false
+
+- name: 1.1.2.1.1 | Check for existing volume groups
+  ansible.builtin.command:
+    cmd: vgs --noheadings -o vg_name
+  register: lvm_vgs
+  changed_when: false
+  failed_when: false
+  when: lvm_available.rc == 0
+
+- name: 1.1.2.1.1 | Check for free space in volume groups
+  ansible.builtin.shell:
+    cmd: vgs --noheadings -o vg_free --units m | awk '{print int($1)}'
+  register: lvm_free_space
+  changed_when: false
+  failed_when: false
+  when:
+    - lvm_available.rc == 0
+    - lvm_vgs.stdout | trim | length > 0
+
+- name: 1.1.2.1.1 | Set LVM validation facts
+  ansible.builtin.set_fact:
+    cis_lvm_present: "{{ lvm_available.rc == 0 and (lvm_vgs.stdout | default('') | trim | length > 0) }}"
+    cis_lvm_has_free_space: "{{ (lvm_free_space.stdout | default('0') | int) > 100 }}"
+  when: cis_tmp_mount_enabled
+
+- name: 1.1.2.1.1 | Document LVM limitation (no LVM or insufficient space)
+  ansible.builtin.debug:
+    msg: >
+      [WARNING] CIS 1.1.2.1.1: Cannot create dedicated /tmp partition.
+      LVM Present: {{ cis_lvm_present | default(false) }}.
+      Free Space Available: {{ cis_lvm_has_free_space | default(false) }}.
+      Using tmpfs as alternative. For production systems requiring a physical
+      partition, provision adequate LVM space before running this role.
+  when:
+    - cis_tmp_mount_enabled
+    - tmp_mount_check.rc != 0
+    - not (cis_lvm_present | default(false)) or not (cis_lvm_has_free_space | default(false))
+
+- name: 1.1.2.1.1 | Log LVM validation failure to file
+  ansible.builtin.lineinfile:
+    path: /var/log/cis-hardening-ansible.log
+    line: "{{ ansible_date_time.iso8601 }} - CIS 1.1.2.1.1 SKIPPED: No LVM or insufficient space for /tmp partition. Using tmpfs fallback."
+    create: true
+    mode: '0640'
+  when:
+    - cis_tmp_mount_enabled
+    - tmp_mount_check.rc != 0
+    - not (cis_lvm_present | default(false)) or not (cis_lvm_has_free_space | default(false))
+
+- name: 1.1.2.1.1 | Unmask tmp.mount
+  ansible.builtin.systemd:
+    name: tmp.mount
+    masked: false
+  when:
+    - cis_tmp_mount_enabled
+    - not cis_audit_only
+
+- name: 1.1.2.1.1 | Configure /tmp in fstab (tmpfs fallback)
+  ansible.posix.mount:
+    path: /tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ cis_tmp_mount_options }},size={{ cis_tmp_mount_size }}"
+    state: mounted
+  when:
+    - cis_tmp_mount_enabled
+    - not cis_audit_only
+
+# -----------------------------------------------------------------------------
+# 1.1.2.1.4 - noexec on /tmp
+# -----------------------------------------------------------------------------
+
+- name: 1.1.2.1.4 | Verify noexec on /tmp
+  ansible.builtin.command:
+    cmd: findmnt -kn /tmp -O noexec
+  register: tmp_noexec_check
+  changed_when: false
+  failed_when: false
+
+- name: 1.1.2.1.4 | Remount /tmp with noexec if needed
+  ansible.posix.mount:
+    path: /tmp
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ cis_tmp_mount_options }},size={{ cis_tmp_mount_size }}"
+    state: remounted
+  when:
+    - cis_tmp_mount_enabled
+    - tmp_noexec_check.rc != 0
+
+# -----------------------------------------------------------------------------
+# 1.1.2.2.4 - noexec on /dev/shm
+# -----------------------------------------------------------------------------
+
+- name: 1.1.2.2.4 | Check current /dev/shm mount options
+  ansible.builtin.command:
+    cmd: findmnt -kn /dev/shm -O noexec
+  register: devshm_noexec_check
+  changed_when: false
+  failed_when: false
+
+- name: 1.1.2.2.4 | Configure /dev/shm in fstab
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: "{{ cis_devshm_mount_options }}"
+    state: mounted
+
+- name: 1.1.2.2.4 | Remount /dev/shm if noexec not present
+  ansible.builtin.command:
+    cmd: mount -o remount,noexec /dev/shm
+  when: devshm_noexec_check.rc != 0
+  changed_when: true

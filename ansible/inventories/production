@@ -1,0 +1,36 @@
+# =============================================================================
+# Production Inventory
+# =============================================================================
+# Organize hosts by CIS compliance level for targeted hardening.
+# =============================================================================
+
+[all:vars]
+ansible_user=ansible
+ansible_become=true
+ansible_become_method=sudo
+ansible_python_interpreter=/usr/bin/python3
+
+# -----------------------------------------------------------------------------
+# Level 1 Servers (Standard Security)
+# -----------------------------------------------------------------------------
+# Apply CIS Level 1 controls - suitable for most production systems
+[level1_servers]
+# web-server-01 ansible_host=192.168.1.10
+# app-server-01 ansible_host=192.168.1.20
+# db-server-01 ansible_host=192.168.1.30
+
+# -----------------------------------------------------------------------------
+# Level 2 Servers (Enhanced Security)
+# -----------------------------------------------------------------------------
+# Apply CIS Level 2 controls - for high-security environments
+# WARNING: Level 2 includes audit immutable mode and stricter controls
+[level2_servers]
+# secure-server-01 ansible_host=192.168.1.100
+# pci-server-01 ansible_host=192.168.1.101
+
+# -----------------------------------------------------------------------------
+# Group Definitions
+# -----------------------------------------------------------------------------
+[ubuntu_servers:children]
+level1_servers
+level2_servers

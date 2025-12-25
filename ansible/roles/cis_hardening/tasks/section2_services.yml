@@ -1,0 +1,95 @@
+---
+# =============================================================================
+# Section 2: Services Configuration
+# =============================================================================
+# Controls:
+# - 2.1.1:  Ensure autofs services are not in use
+# - 2.1.21: Ensure mail transfer agent is configured for local-only mode
+# - 2.1.22: Ensure only approved services are listening (Manual - logging only)
+# - 2.2.4:  Ensure telnet client is not installed
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 2.1.1 - Disable autofs Service
+# -----------------------------------------------------------------------------
+
+- name: 2.1.1 | Check if autofs is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -s autofs
+  register: autofs_installed
+  changed_when: false
+  failed_when: false
+
+- name: 2.1.1 | Stop autofs service
+  ansible.builtin.systemd:
+    name: autofs
+    state: stopped
+    enabled: false
+  when:
+    - autofs_installed.rc == 0
+    - cis_disable_autofs | default(true)
+  failed_when: false
+
+- name: 2.1.1 | Mask autofs service
+  ansible.builtin.systemd:
+    name: autofs
+    masked: true
+  when:
+    - autofs_installed.rc == 0
+    - cis_disable_autofs | default(true)
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# 2.1.21 - Configure MTA for Local-Only Mode
+# -----------------------------------------------------------------------------
+
+- name: 2.1.21 | Check if postfix is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -s postfix
+  register: postfix_installed
+  changed_when: false
+  failed_when: false
+
+- name: 2.1.21 | Configure postfix for local-only mode
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_interfaces'
+    line: 'inet_interfaces = loopback-only'
+    backup: true
+  when:
+    - postfix_installed.rc == 0
+    - cis_mta_local_only | default(true)
+  notify: restart postfix
+
+- name: 2.1.21 | Verify MTA is not listening on external interfaces
+  ansible.builtin.shell:
+    cmd: ss -tlnp | grep ':25 ' | grep -v '127.0.0.1\|::1' || true
+  register: mta_external_check
+  changed_when: false
+
+- name: 2.1.21 | Log MTA external binding warning
+  ansible.builtin.debug:
+    msg: "WARNING: MTA is listening on external interfaces. Consider restricting to localhost only."
+  when: mta_external_check.stdout | length > 0
+
+# -----------------------------------------------------------------------------
+# 2.2.4 - Remove Telnet Client
+# -----------------------------------------------------------------------------
+
+- name: 2.2.4 | Remove telnet client
+  ansible.builtin.apt:
+    name: telnet
+    state: absent
+    purge: true
+  when: cis_remove_telnet | default(true)
+
+# -----------------------------------------------------------------------------
+# Additional Insecure Services Removal
+# -----------------------------------------------------------------------------
+
+- name: 2.x | Remove insecure packages
+  ansible.builtin.apt:
+    name: "{{ cis_packages_to_remove }}"
+    state: absent
+    purge: true
+  when: cis_packages_to_remove | length > 0

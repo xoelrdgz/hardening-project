@@ -1,0 +1,201 @@
+---
+# =============================================================================
+# Section 5.2/5.3: PAM and Sudo Configuration
+# =============================================================================
+# Controls:
+# - 5.2.2:    Ensure sudo commands use pty
+# - 5.2.4:    Ensure users must provide password for escalation
+# - 5.3.3.1.1: Ensure password failed lockout is configured
+# - 5.3.3.2.2: Ensure minimum password length is configured
+# - 5.3.3.2.3: Ensure password complexity is configured
+# - 5.3.3.3.1: Ensure password reuse is limited
+# - 5.3.3.4.3: Ensure PAM is using strong hash algorithm
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 5.2.2 - Sudo PTY Allocation
+# -----------------------------------------------------------------------------
+
+- name: 5.2.2 | Ensure sudo commands use pty
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/cis-hardening
+    line: "Defaults use_pty"
+    create: true
+    mode: '0440'
+    owner: root
+    group: root
+    validate: 'visudo -cf %s'
+  when: cis_sudo_use_pty | default(true)
+
+# -----------------------------------------------------------------------------
+# 5.2.4 - Sudo Password Requirement
+# -----------------------------------------------------------------------------
+
+- name: 5.2.4 | Check for NOPASSWD entries in sudoers
+  ansible.builtin.shell:
+    cmd: grep -rE "^\s*[^#].*NOPASSWD" /etc/sudoers /etc/sudoers.d/ 2>/dev/null || true
+  register: nopasswd_check
+  changed_when: false
+
+- name: 5.2.4 | Log NOPASSWD warning
+  ansible.builtin.debug:
+    msg: |
+      WARNING: NOPASSWD entries found in sudoers configuration.
+      Review and remove unless absolutely required:
+      {{ nopasswd_check.stdout_lines | join('\n') }}
+  when: nopasswd_check.stdout | length > 0
+
+- name: 5.2.4 | Ensure sudo log file is configured
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/cis-hardening
+    line: 'Defaults logfile="/var/log/sudo.log"'
+    create: true
+    mode: '0440'
+    owner: root
+    group: root
+    validate: 'visudo -cf %s'
+
+# -----------------------------------------------------------------------------
+# 5.3.3.1.1 - Password Failed Lockout (PAM faillock)
+# -----------------------------------------------------------------------------
+# WARNING: PAM configuration is critical. Misconfiguration can lock you out!
+# This uses /etc/security/faillock.conf which is safer than modifying PAM files directly.
+# To enable, set cis_pam_faillock_enabled: true in your vars
+# -----------------------------------------------------------------------------
+
+- name: 5.3.3.1.1 | Display faillock configuration status
+  ansible.builtin.debug:
+    msg: >
+      PAM faillock is {{ 'ENABLED' if (cis_pam_faillock_enabled | default(false)) else 'DISABLED (default)' }}.
+      To enable, set cis_pam_faillock_enabled: true in your variables.
+      WARNING: Test in a non-production environment first!
+
+- name: 5.3.3.1.1 | Configure faillock settings in faillock.conf (safe method)
+  ansible.builtin.blockinfile:
+    path: /etc/security/faillock.conf
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+    marker: "# {mark} ANSIBLE MANAGED - CIS Hardening faillock settings"
+    block: |
+      # CIS 5.3.3.1.1 - Account lockout configuration
+      # deny: Number of failed attempts before lockout
+      deny = {{ cis_pam_faillock_deny }}
+      # unlock_time: Time in seconds before automatic unlock (0 = manual unlock required)
+      unlock_time = {{ cis_pam_faillock_unlock_time }}
+      # fail_interval: Time window for counting failures
+      fail_interval = 900
+      # silent: Don't print informational messages
+      silent
+      # audit: Log to audit log
+      audit
+      # even_deny_root: Also lock root account (DISABLED for safety)
+      # even_deny_root
+  when: cis_pam_faillock_enabled | default(false)
+  
+
+# -----------------------------------------------------------------------------
+# 5.3.3.2.2/5.3.3.2.3 - Password Quality (pwquality)
+# -----------------------------------------------------------------------------
+
+- name: 5.3.3.2.x | Install libpam-pwquality
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+
+- name: 5.3.3.2.2 | Configure minimum password length
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^minlen'
+    line: "minlen = {{ cis_password_min_length }}"
+    backup: true
+
+- name: 5.3.3.2.3 | Configure password complexity - minclass
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^minclass'
+    line: "minclass = {{ cis_password_min_class }}"
+
+- name: 5.3.3.2.3 | Configure password complexity - dcredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^dcredit'
+    line: "dcredit = {{ cis_password_dcredit }}"
+
+- name: 5.3.3.2.3 | Configure password complexity - ucredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^ucredit'
+    line: "ucredit = {{ cis_password_ucredit }}"
+
+- name: 5.3.3.2.3 | Configure password complexity - lcredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^lcredit'
+    line: "lcredit = {{ cis_password_lcredit }}"
+
+- name: 5.3.3.2.3 | Configure password complexity - ocredit
+  ansible.builtin.lineinfile:
+    path: /etc/security/pwquality.conf
+    regexp: '^ocredit'
+    line: "ocredit = {{ cis_password_ocredit }}"
+
+# -----------------------------------------------------------------------------
+# 5.3.3.3.1 - Password Reuse (pam_pwhistory)
+# -----------------------------------------------------------------------------
+# WARNING: Modifying PAM files can break authentication. Disabled by default.
+# To enable, set cis_password_history_enabled: true
+
+- name: 5.3.3.3.1 | Configure pwhistory via pwhistory.conf (safe method)
+  ansible.builtin.blockinfile:
+    path: /etc/security/pwhistory.conf
+    create: true
+    mode: '0644'
+    owner: root
+    group: root
+    marker: "# {mark} ANSIBLE MANAGED - CIS Hardening pwhistory settings"
+    block: |
+      # CIS 5.3.3.3.1 - Password history configuration
+      # remember: Number of previous passwords to remember
+      remember = {{ cis_password_remember }}
+  when: cis_password_history_enabled | default(false)
+
+# -----------------------------------------------------------------------------
+# 5.4.1.1 - Password Expiration
+# -----------------------------------------------------------------------------
+
+- name: 5.4.1.1 | Configure PASS_MAX_DAYS
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MAX_DAYS'
+    line: "PASS_MAX_DAYS {{ cis_pass_max_days }}"
+    backup: true
+
+- name: 5.4.1.1 | Configure PASS_MIN_DAYS
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_MIN_DAYS'
+    line: "PASS_MIN_DAYS {{ cis_pass_min_days }}"
+
+- name: 5.4.1.1 | Configure PASS_WARN_AGE
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^PASS_WARN_AGE'
+    line: "PASS_WARN_AGE {{ cis_pass_warn_age }}"
+
+# -----------------------------------------------------------------------------
+# 5.3.3.4.3 - PAM Strong Hash Algorithm
+# -----------------------------------------------------------------------------
+
+- name: 5.3.3.4.3 | Verify current PAM hash algorithm (info only)
+  ansible.builtin.shell:
+    cmd: grep -E "^password.*pam_unix" /etc/pam.d/common-password || echo "pam_unix not found"
+  register: pam_hash_check
+  changed_when: false
+  failed_when: false
+
+- name: 5.3.3.4.3 | Display current PAM configuration
+  ansible.builtin.debug:
+    msg: |
+      Current PAM password configuration: {{ pam_hash_check.stdout }}

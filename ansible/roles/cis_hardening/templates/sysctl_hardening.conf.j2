@@ -1,0 +1,18 @@
+# =============================================================================
+# CIS Kernel Hardening - Sysctl Configuration
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# CIS Level: {{ cis_level }}
+# =============================================================================
+# Controls:
+# - 1.5.1: kernel.randomize_va_space (ASLR)
+# - 1.5.2: kernel.yama.ptrace_scope (ptrace restriction)
+# - 1.5.3: fs.suid_dumpable (core dumps)
+# =============================================================================
+
+{% for key, value in cis_sysctl_settings.items() %}
+# {{ key }}
+{{ key }} = {{ value }}
+
+{% endfor %}

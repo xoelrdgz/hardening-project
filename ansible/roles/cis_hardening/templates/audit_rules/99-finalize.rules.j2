@@ -1,0 +1,32 @@
+# =============================================================================
+# CIS Control 6.2.3.20 - Make audit configuration immutable
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# CIS Level: {{ cis_level }}
+# =============================================================================
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# WARNING: IMMUTABLE MODE ENABLED
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+# Once this rule is loaded, audit configuration CANNOT be modified without
+# a full system reboot!
+#
+# If audit logs fill the disk while in immutable mode, the only recovery
+# option is to boot from rescue media.
+#
+# To disable immutable mode:
+#   1. Remove this file
+#   2. Reboot the system
+#
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# This MUST be the last rule in the audit configuration
+# =============================================================================
+
+{% if cis_audit_immutable %}
+# Lock down audit configuration
+-e 2
+{% else %}
+# Immutable mode is disabled
+# -e 2
+{% endif %}

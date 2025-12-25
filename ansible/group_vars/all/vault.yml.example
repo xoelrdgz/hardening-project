@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# Ansible Vault - Encrypted Secrets
+# =============================================================================
+# This file should be encrypted with ansible-vault!
+#
+# To encrypt:
+#   ansible-vault encrypt group_vars/all/vault.yml
+#
+# To edit:
+#   ansible-vault edit group_vars/all/vault.yml
+#
+# To view:
+#   ansible-vault view group_vars/all/vault.yml
+#
+# =============================================================================
+# IMPORTANT: This file is provided as a TEMPLATE.
+# Replace the placeholder values with actual secrets before encrypting!
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GRUB Bootloader Password (CIS Control 1.4.1)
+# -----------------------------------------------------------------------------
+# Generate with: grub-mkpasswd-pbkdf2 --iteration-count=600000
+#
+# Example hash format:
+#   grub.pbkdf2.sha512.600000.XXXXXXXX...
+#
+# REPLACE THIS WITH YOUR ACTUAL HASH:
+cis_grub_password_hash: "grub.pbkdf2.sha512.600000.REPLACE_WITH_ACTUAL_HASH_GENERATED_BY_grub-mkpasswd-pbkdf2"
+
+# Optional: Custom GRUB superuser name (default: grubadmin)
+# cis_grub_superuser: "grubadmin"

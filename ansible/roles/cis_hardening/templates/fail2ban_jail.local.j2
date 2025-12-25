@@ -1,0 +1,72 @@
+# =============================================================================
+# Fail2Ban Local Configuration
+# Managed by Ansible - CIS Hardening Project
+# =============================================================================
+
+[DEFAULT]
+# Ban duration (1 hour by default)
+bantime = {{ fail2ban_bantime | default('3600') }}
+
+# Time window for counting failures
+findtime = {{ fail2ban_findtime | default('600') }}
+
+# Number of failures before ban
+maxretry = {{ fail2ban_maxretry | default('5') }}
+
+# Ignore local addresses
+ignoreip = 127.0.0.1/8 ::1 {{ fail2ban_ignoreip | default('') }}
+
+# Default action (ban IP and log)
+banaction = nftables-multiport
+banaction_allports = nftables-allports
+
+# Logging
+logtarget = /var/log/fail2ban.log
+loglevel = INFO
+
+# Backend
+backend = systemd
+
+# =============================================================================
+# SSH Protection
+# =============================================================================
+
+[sshd]
+enabled = true
+port = {{ ssh_port | default('22') }}
+filter = sshd
+logpath = %(sshd_log)s
+maxretry = {{ fail2ban_ssh_maxretry | default('3') }}
+bantime = {{ fail2ban_ssh_bantime | default('3600') }}
+findtime = {{ fail2ban_ssh_findtime | default('600') }}
+
+[sshd-ddos]
+enabled = true
+port = {{ ssh_port | default('22') }}
+filter = sshd-ddos
+logpath = %(sshd_log)s
+maxretry = 6
+bantime = 600
+
+# =============================================================================
+# Additional Jails (Optional)
+# =============================================================================
+
+{% if fail2ban_enable_recidive | default(true) %}
+[recidive]
+enabled = true
+logpath = /var/log/fail2ban.log
+banaction = nftables-allports
+bantime = 604800  ; 1 week
+findtime = 86400  ; 1 day
+maxretry = 5
+{% endif %}
+
+{% if fail2ban_enable_pam_generic | default(false) %}
+[pam-generic]
+enabled = true
+filter = pam-generic
+logpath = /var/log/auth.log
+maxretry = 6
+{% endif %}
+

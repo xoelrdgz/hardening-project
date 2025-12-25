@@ -1,0 +1,11 @@
+# .gitattributes
+# Establecer el comportamiento predeterminado para todos los archivos detectados como texto
+* text=auto eol=lf
+
+# Forzar explícitamente tipos de archivo críticos para evitar errores
+*.sh      text eol=lf
+*.bash    text eol=lf
+*.py      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.conf    text eol=lf

@@ -1,0 +1,113 @@
+---
+# =============================================================================
+# Section 5.1: SSH Server Hardening
+# =============================================================================
+# Controls:
+# - 5.1.6:  Ensure SSH MaxAuthTries is set to 3 or less
+# - 5.1.7:  Ensure SSH ClientAliveInterval and ClientAliveCountMax are configured
+# - 5.1.12: Ensure only strong Ciphers are used
+# - 5.1.15: Ensure only strong MAC algorithms are used
+# - 5.1.20: Ensure SSH root login is disabled
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Prerequisite Checks
+# -----------------------------------------------------------------------------
+
+- name: 5.1.x | Check if SSH server is installed
+  ansible.builtin.command:
+    cmd: which sshd
+  register: sshd_installed
+  changed_when: false
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Deploy CIS-Compliant SSH Configuration
+# -----------------------------------------------------------------------------
+
+- name: 5.1.x | Deploy CIS SSH hardening configuration
+  ansible.builtin.template:
+    src: sshd_cis.conf.j2
+    dest: /etc/ssh/sshd_config.d/50-cis-hardening.conf
+    owner: root
+    group: root
+    mode: '0600'
+    backup: true
+  when: sshd_installed.rc == 0
+  notify: restart sshd
+
+- name: 5.1.x | Validate SSH configuration
+  ansible.builtin.command:
+    cmd: sshd -t
+  register: sshd_validate
+  changed_when: false
+  failed_when: sshd_validate.rc != 0
+  when: sshd_installed.rc == 0
+
+# -----------------------------------------------------------------------------
+# Individual Controls (for granular control)
+# -----------------------------------------------------------------------------
+
+- name: 5.1.6 | Ensure MaxAuthTries is set
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/50-cis-hardening.conf
+    regexp: '^MaxAuthTries'
+    line: "MaxAuthTries {{ cis_ssh_max_auth_tries }}"
+    create: true
+    mode: '0600'
+  when: sshd_installed.rc == 0
+  notify: restart sshd
+
+- name: 5.1.7 | Ensure ClientAliveInterval is set
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/50-cis-hardening.conf
+    regexp: '^ClientAliveInterval'
+    line: "ClientAliveInterval {{ cis_ssh_client_alive_interval }}"
+    create: true
+    mode: '0600'
+  when: sshd_installed.rc == 0
+  notify: restart sshd
+
+- name: 5.1.7 | Ensure ClientAliveCountMax is set
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/50-cis-hardening.conf
+    regexp: '^ClientAliveCountMax'
+    line: "ClientAliveCountMax {{ cis_ssh_client_alive_count_max }}"
+    create: true
+    mode: '0600'
+  when: sshd_installed.rc == 0
+  notify: restart sshd
+
+- name: 5.1.20 | Ensure SSH root login is disabled
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config.d/50-cis-hardening.conf
+    regexp: '^PermitRootLogin'
+    line: "PermitRootLogin {{ cis_ssh_permit_root_login }}"
+    create: true
+    mode: '0600'
+  when: sshd_installed.rc == 0
+  notify: restart sshd
+
+# -----------------------------------------------------------------------------
+# SSH Key Permissions
+# -----------------------------------------------------------------------------
+
+- name: 5.1.x | Set SSH host key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ lookup('fileglob', '/etc/ssh/ssh_host_*_key', wantlist=True) }}"
+  when: sshd_installed.rc == 0
+  failed_when: false
+
+- name: 5.1.x | Set SSH public key permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ lookup('fileglob', '/etc/ssh/ssh_host_*.pub', wantlist=True) }}"
+  when: sshd_installed.rc == 0
+  failed_when: false

@@ -1,0 +1,21 @@
+# =============================================================================
+# CIS Control 6.2.3.4 - Audit date and time modification events
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# =============================================================================
+
+# adjtimex and settimeofday syscalls - 64-bit
+-a always,exit -F arch=b64 -S adjtimex,settimeofday -k time-change
+
+# adjtimex and settimeofday syscalls - 32-bit
+-a always,exit -F arch=b32 -S adjtimex,settimeofday -k time-change
+
+# clock_settime syscall - 64-bit (CLOCK_REALTIME = 0x0)
+-a always,exit -F arch=b64 -S clock_settime -F a0=0x0 -k time-change
+
+# clock_settime syscall - 32-bit (CLOCK_REALTIME = 0x0)
+-a always,exit -F arch=b32 -S clock_settime -F a0=0x0 -k time-change
+
+# Watch for changes to /etc/localtime
+-w /etc/localtime -p wa -k time-change

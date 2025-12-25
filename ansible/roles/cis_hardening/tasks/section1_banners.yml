@@ -1,0 +1,70 @@
+---
+# =============================================================================
+# Section 1.6: MOTD and Banner Configuration
+# =============================================================================
+# Controls:
+# - 1.6.1.4: Ensure access to /etc/motd is configured
+# - 1.6.1.5: Ensure access to /etc/issue is configured
+# - 1.6.1.6: Ensure access to /etc/issue.net is configured
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1.6.1.4 - /etc/motd Configuration
+# -----------------------------------------------------------------------------
+
+- name: 1.6.1.4 | Set /etc/motd permissions
+  ansible.builtin.file:
+    path: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'
+  failed_when: false
+
+- name: 1.6.1.4 | Configure /etc/motd content
+  ansible.builtin.template:
+    src: motd.j2
+    dest: /etc/motd
+    owner: root
+    group: root
+    mode: '0644'
+  when: cis_configure_motd | default(true)
+
+# -----------------------------------------------------------------------------
+# 1.6.1.5 - /etc/issue Configuration
+# -----------------------------------------------------------------------------
+
+- name: 1.6.1.5 | Set /etc/issue permissions
+  ansible.builtin.file:
+    path: /etc/issue
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: 1.6.1.5 | Configure /etc/issue content
+  ansible.builtin.template:
+    src: issue.j2
+    dest: /etc/issue
+    owner: root
+    group: root
+    mode: '0644'
+  when: cis_configure_issue | default(true)
+
+# -----------------------------------------------------------------------------
+# 1.6.1.6 - /etc/issue.net Configuration
+# -----------------------------------------------------------------------------
+
+- name: 1.6.1.6 | Set /etc/issue.net permissions
+  ansible.builtin.file:
+    path: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: 1.6.1.6 | Configure /etc/issue.net content
+  ansible.builtin.template:
+    src: issue.net.j2
+    dest: /etc/issue.net
+    owner: root
+    group: root
+    mode: '0644'
+  when: cis_configure_issue | default(true)

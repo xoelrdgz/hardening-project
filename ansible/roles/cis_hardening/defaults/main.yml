@@ -1,0 +1,316 @@
+---
+# =============================================================================
+# Default Variables for CIS Hardening Role
+# =============================================================================
+# These are the default values. Override in group_vars or host_vars as needed.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global Settings
+# -----------------------------------------------------------------------------
+
+# CIS Compliance Level (1 or 2)
+# Level 1: Essential security for all systems
+# Level 2: Advanced security for high-security environments
+cis_level: 1
+
+# Audit mode - when true, only check compliance without making changes
+cis_audit_only: false
+
+# Generate compliance report after run
+cis_generate_report: true
+
+# Track if reboot is required (set by handlers)
+cis_reboot_required: false
+
+# -----------------------------------------------------------------------------
+# Section 1: Initial Setup - Filesystem
+# -----------------------------------------------------------------------------
+
+# 1.1.1.9 - USB Storage
+cis_disable_usb_storage: true
+
+# 1.1.1.10 - Unused Filesystems
+cis_disable_unused_filesystems: true
+cis_disabled_filesystems:
+  - cramfs
+  - freevxfs
+  - hfs
+  - hfsplus
+  - jffs2
+  - squashfs
+  - udf
+
+# 1.1.2.1.1 - /tmp partition
+cis_tmp_mount_enabled: true
+cis_tmp_mount_options: "defaults,rw,nosuid,nodev,noexec,relatime"
+cis_tmp_mount_size: "2G"
+
+# 1.1.2.2.4 - /dev/shm options
+cis_devshm_mount_options: "defaults,rw,nosuid,nodev,noexec,relatime"
+
+# -----------------------------------------------------------------------------
+# Section 1.3: Mandatory Access Control (AppArmor)
+# -----------------------------------------------------------------------------
+
+# 1.3.1.2 - AppArmor in bootloader
+cis_apparmor_bootloader: true
+
+# 1.3.1.4 - AppArmor enforce mode (Level 2)
+cis_apparmor_enforce_all: false
+
+# -----------------------------------------------------------------------------
+# Section 1.4: Bootloader Security
+# -----------------------------------------------------------------------------
+
+# 1.4.1 - GRUB password
+# IMPORTANT: The actual password hash should be stored in Ansible Vault
+# See group_vars/all/vault.yml for the encrypted value
+cis_grub_password_enabled: true
+cis_grub_superuser: "grubadmin"
+# cis_grub_password_hash is defined in vault.yml
+
+# 1.4.2 - GRUB config permissions
+cis_grub_config_permissions: "0600"
+cis_grub_config_owner: "root"
+cis_grub_config_group: "root"
+
+# -----------------------------------------------------------------------------
+# Section 1.5: Kernel Hardening
+# -----------------------------------------------------------------------------
+
+# Sysctl parameters for kernel hardening
+cis_sysctl_settings:
+  # 1.5.1 - ASLR
+  kernel.randomize_va_space: 2
+  # 1.5.2 - ptrace_scope
+  kernel.yama.ptrace_scope: 1
+  # 1.5.3 - Core dumps (suid_dumpable)
+  fs.suid_dumpable: 0
+
+# 1.5.3 - Core dump limits
+cis_core_dump_restriction: true
+
+# -----------------------------------------------------------------------------
+# Section 3.3: Network Parameters (Host Only)
+# -----------------------------------------------------------------------------
+
+# Network sysctl parameters for hardening
+cis_network_sysctl_settings:
+  # 3.3.1 - IP forwarding disabled
+  net.ipv4.ip_forward: 0
+  net.ipv6.conf.all.forwarding: 0
+  # 3.3.2 - Packet redirect sending disabled
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  # 3.3.3 - ICMP redirects not accepted
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  # 3.3.4 - Broadcast ICMP requests ignored (smurf attack)
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  # 3.3.5 - Secure ICMP redirects not accepted
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  # 3.3.9 - Suspicious packets are logged (martians)
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  # 3.3.10 - TCP SYN cookies enabled (SYN flood protection)
+  net.ipv4.tcp_syncookies: 1
+  # Additional: Bogus ICMP responses ignored
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  # Additional: Source route disabled
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+
+# -----------------------------------------------------------------------------
+# Section 5.4: User Authentication
+# -----------------------------------------------------------------------------
+
+# 5.4.1.4 - Password hashing algorithm
+cis_password_hash_algorithm: "SHA512"
+
+# 5.4.1.5 - Inactive password lock (days)
+cis_inactive_password_lock_days: 45
+
+# -----------------------------------------------------------------------------
+# Section 6.1: Logging - rsyslog
+# -----------------------------------------------------------------------------
+
+# 6.1.3.4 - rsyslog file permissions
+cis_rsyslog_file_create_mode: "0640"
+
+# -----------------------------------------------------------------------------
+# Section 6.2: Auditing - auditd
+# -----------------------------------------------------------------------------
+
+# 6.2.1.2 - Enable auditd
+cis_auditd_enabled: true
+
+# 6.2.2.3 - Disk full action
+cis_auditd_disk_full_action: "halt"
+cis_auditd_disk_error_action: "halt"
+
+# 6.2.3.x - Audit rules
+cis_audit_rules_enabled: true
+
+# 6.2.3.20 - Audit immutable mode (Level 2 - DANGEROUS)
+# This locks audit configuration until reboot
+cis_audit_immutable: false
+cis_audit_immutable_safety_checks: true
+cis_audit_min_disk_free_percent: 20
+
+# -----------------------------------------------------------------------------
+# Section 6.3: File Integrity - AIDE
+# -----------------------------------------------------------------------------
+
+# 6.3.1 - AIDE installation
+cis_aide_enabled: true
+cis_aide_initialize_db: true
+cis_aide_cron_enabled: true
+
+# -----------------------------------------------------------------------------
+# Kernel Modules to Disable
+# -----------------------------------------------------------------------------
+cis_disabled_kernel_modules:
+  - name: usb-storage
+    enabled: "{{ cis_disable_usb_storage }}"
+
+# -----------------------------------------------------------------------------
+# Packages to Install
+# -----------------------------------------------------------------------------
+cis_packages_to_install:
+  - aide
+  - aide-common
+  - apparmor
+  - apparmor-utils
+  - auditd
+  - audispd-plugins
+
+# Packages to remove
+cis_packages_to_remove:
+  - telnet
+  - nis
+  - rsh-client
+
+# -----------------------------------------------------------------------------
+# Section 1.6: Banners
+# -----------------------------------------------------------------------------
+cis_configure_motd: true
+cis_configure_issue: true
+cis_organization_name: "Organization"
+
+# -----------------------------------------------------------------------------
+# Section 2: Services
+# -----------------------------------------------------------------------------
+cis_disable_autofs: true
+cis_mta_local_only: true
+cis_remove_telnet: true
+cis_disable_avahi: true
+cis_disable_cups: true
+cis_disable_bluetooth: true
+
+# -----------------------------------------------------------------------------
+# Section 3.1: Wireless
+# -----------------------------------------------------------------------------
+cis_disable_wireless: true
+
+# -----------------------------------------------------------------------------
+# Section 4.3: nftables Firewall
+# -----------------------------------------------------------------------------
+cis_nftables_enabled: true
+cis_nftables_allowed_tcp_ports:
+  - 22
+cis_nftables_allowed_udp_ports: []
+cis_nftables_log_dropped: false
+
+# -----------------------------------------------------------------------------
+# Section 5.1: SSH Hardening
+# -----------------------------------------------------------------------------
+cis_ssh_max_auth_tries: 3
+cis_ssh_client_alive_interval: 300
+cis_ssh_client_alive_count_max: 3
+cis_ssh_ciphers: "aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr"
+cis_ssh_macs: "hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256"
+cis_ssh_kex_algorithms: "curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256"
+cis_ssh_permit_root_login: "no"
+cis_ssh_x11_forwarding: "no"
+cis_ssh_login_grace_time: 60
+cis_ssh_max_sessions: 10
+cis_ssh_max_startups: "10:30:60"
+cis_ssh_banner: "/etc/issue.net"
+cis_ssh_log_level: "VERBOSE"
+cis_ssh_allow_tcp_forwarding: "no"
+cis_ssh_allow_agent_forwarding: "no"
+
+# -----------------------------------------------------------------------------
+# Section 5.2/5.3: PAM and Sudo
+# -----------------------------------------------------------------------------
+cis_sudo_use_pty: true
+cis_pam_faillock_enabled: false  # DISABLED by default - can break authentication if misconfigured
+cis_pam_faillock_deny: 5
+cis_pam_faillock_unlock_time: 900
+cis_password_min_length: 14
+cis_password_min_class: 4
+cis_password_dcredit: -1
+cis_password_ucredit: -1
+cis_password_lcredit: -1
+cis_password_ocredit: -1
+cis_password_history_enabled: false  # DISABLED by default - modifying PAM can break auth
+cis_password_remember: 5
+cis_pass_max_days: 365
+cis_pass_min_days: 1
+cis_pass_warn_age: 7
+
+# -----------------------------------------------------------------------------
+# Section 0: Security Tools Installation
+# -----------------------------------------------------------------------------
+
+# Enable security tools installation
+install_security_tools: true
+
+# Install recommended tools (fail2ban, debsums, etc.)
+install_recommended_tools: true
+
+# Install ClamAV antivirus (optional - uses significant disk space)
+install_clamav: false
+
+# SSH port (used by nftables and fail2ban)
+ssh_port: 22
+
+# -----------------------------------------------------------------------------
+# Fail2Ban Configuration
+# -----------------------------------------------------------------------------
+fail2ban_bantime: 3600
+fail2ban_findtime: 600
+fail2ban_maxretry: 5
+fail2ban_ignoreip: ""
+fail2ban_ssh_maxretry: 3
+fail2ban_ssh_bantime: 3600
+fail2ban_ssh_findtime: 600
+fail2ban_enable_recidive: true
+fail2ban_enable_pam_generic: false
+
+# -----------------------------------------------------------------------------
+# nftables Firewall Configuration (Enhanced)
+# -----------------------------------------------------------------------------
+nft_enable_ipv6: false
+nft_allow_icmp: true
+nft_rate_limit_ssh: true
+nft_log_dropped: true
+nft_allowed_tcp_ports: []
+nft_allowed_udp_ports: []
+
+# -----------------------------------------------------------------------------
+# Lynis Score Improvements
+# -----------------------------------------------------------------------------
+
+# Apply Lynis recommended improvements
+apply_lynis_improvements: true
+
+# Remove compilers (gcc, g++, make, etc.)
+# WARNING: Only enable for production servers that don't require compilation
+remove_compilers: false

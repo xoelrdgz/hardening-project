@@ -1,0 +1,61 @@
+---
+# =============================================================================
+# Section 1.5: Kernel Hardening
+# =============================================================================
+# Controls:
+# - 1.5.1: Ensure ASLR is enabled
+# - 1.5.2: Ensure ptrace_scope is restricted
+# - 1.5.3: Ensure core dumps are restricted
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Sysctl Configuration (1.5.1, 1.5.2, 1.5.3)
+# -----------------------------------------------------------------------------
+
+- name: 1.5.x | Deploy kernel hardening sysctl configuration
+  ansible.builtin.template:
+    src: sysctl_hardening.conf.j2
+    dest: /etc/sysctl.d/60-cis-hardening.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: reload sysctl
+
+- name: 1.5.x | Apply sysctl parameters immediately
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: true
+    state: present
+    reload: true
+    sysctl_file: /etc/sysctl.d/60-cis-hardening.conf
+  loop: "{{ cis_sysctl_settings | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+
+# -----------------------------------------------------------------------------
+# 1.5.3 - Core Dump Restrictions (limits.conf)
+# -----------------------------------------------------------------------------
+
+- name: 1.5.3 | Configure core dump limits
+  community.general.pam_limits:
+    domain: '*'
+    limit_type: hard
+    limit_item: core
+    value: 0
+    dest: /etc/security/limits.d/99-cis-core-limits.conf
+  when: cis_core_dump_restriction
+
+- name: 1.5.3 | Configure systemd-coredump if present
+  ansible.builtin.blockinfile:
+    path: /etc/systemd/coredump.conf
+    block: |
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+    create: true
+    mode: '0644'
+    marker: "# {mark} CIS HARDENING - Core Dump Restriction"
+  when: cis_core_dump_restriction
+  notify: "notify reboot required"

@@ -1,0 +1,20 @@
+---
+# =============================================================================
+# Level 1 Profile Variables
+# =============================================================================
+# CIS Level 1 provides essential security for all systems.
+# These controls should be applied to all servers.
+# =============================================================================
+
+cis_level: 1
+
+# Level 1 controls are enabled by default in defaults/main.yml
+# This file can be used to customize Level 1 specific settings
+
+# Audit immutable is NOT enabled for Level 1
+cis_audit_immutable: false
+
+# AppArmor enforce all is typically Level 2, but can be enabled for L1
+cis_apparmor_enforce_all: false
+
+# Additional Level 1 specific overrides can be added here

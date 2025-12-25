@@ -1,0 +1,72 @@
+---
+# =============================================================================
+# Section 1.4: Bootloader Security
+# =============================================================================
+# Controls:
+# - 1.4.1: Ensure bootloader password is set
+# - 1.4.2: Ensure access to bootloader config is configured
+#
+# IMPORTANT: GRUB password hash should be stored in Ansible Vault
+# See group_vars/all/vault.yml
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1.4.1 - Bootloader Password
+# -----------------------------------------------------------------------------
+
+- name: 1.4.1 | Validate GRUB password hash is defined
+  ansible.builtin.assert:
+    that:
+      - cis_grub_password_hash is defined
+      - cis_grub_password_hash | length > 0
+      - cis_grub_password_hash is match('^grub\.pbkdf2\.')
+    fail_msg: |
+      GRUB password hash not properly configured.
+      
+      The variable 'cis_grub_password_hash' must be set in Ansible Vault.
+      
+      To generate a hash:
+        grub-mkpasswd-pbkdf2 --iteration-count=600000
+      
+      Then store in vault:
+        ansible-vault edit group_vars/all/vault.yml
+      
+      Add:
+        cis_grub_password_hash: "grub.pbkdf2.sha512.600000.XXXX..."
+    success_msg: "GRUB password hash validated"
+  when: cis_grub_password_enabled
+
+- name: 1.4.1 | Check if GRUB password is already configured
+  ansible.builtin.command:
+    cmd: grep -q "^password_pbkdf2" /boot/grub/grub.cfg
+  register: grub_password_check
+  changed_when: false
+  failed_when: false
+  when: cis_grub_password_enabled
+
+- name: 1.4.1 | Deploy GRUB superuser configuration
+  ansible.builtin.template:
+    src: grub_40_custom.j2
+    dest: /etc/grub.d/40_custom
+    owner: root
+    group: root
+    mode: '0755'
+    backup: true
+  when:
+    - cis_grub_password_enabled
+    - grub_password_check.rc != 0
+  notify:
+    - update grub
+    - notify reboot required
+
+# -----------------------------------------------------------------------------
+# 1.4.2 - Bootloader Config Permissions
+# -----------------------------------------------------------------------------
+
+- name: 1.4.2 | Set GRUB configuration file permissions
+  ansible.builtin.file:
+    path: /boot/grub/grub.cfg
+    owner: "{{ cis_grub_config_owner }}"
+    group: "{{ cis_grub_config_group }}"
+    mode: "{{ cis_grub_config_permissions }}"
+  when: ansible_facts['os_family'] == 'Debian'

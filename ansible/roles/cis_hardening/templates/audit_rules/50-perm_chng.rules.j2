@@ -1,0 +1,10 @@
+# =============================================================================
+# CIS Control 6.2.3.17 - Audit chacl command usage
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# UID_MIN: {{ cis_uid_min }}
+# =============================================================================
+
+# Monitor chacl command execution
+-a always,exit -F path=/usr/bin/chacl -F perm=x -F auid>={{ cis_uid_min }} -F auid!=unset -k perm_chng

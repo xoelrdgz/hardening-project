@@ -1,0 +1,30 @@
+# =============================================================================
+# CIS Control 6.2.3.8 - Audit user/group modification events
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# =============================================================================
+
+# Monitor system group file
+-w /etc/group -p wa -k identity
+
+# Monitor system user file
+-w /etc/passwd -p wa -k identity
+
+# Monitor encrypted group passwords
+-w /etc/gshadow -p wa -k identity
+
+# Monitor encrypted user passwords
+-w /etc/shadow -p wa -k identity
+
+# Monitor old password storage (PAM)
+-w /etc/security/opasswd -p wa -k identity
+
+# Monitor NSS configuration
+-w /etc/nsswitch.conf -p wa -k identity
+
+# Monitor PAM configuration file
+-w /etc/pam.conf -p wa -k identity
+
+# Monitor PAM configuration directory
+-w /etc/pam.d -p wa -k identity

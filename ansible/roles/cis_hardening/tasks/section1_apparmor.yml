@@ -1,0 +1,119 @@
+---
+# =============================================================================
+# Section 1.3: Mandatory Access Control (AppArmor)
+# =============================================================================
+# Controls:
+# - 1.3.1.2: Ensure AppArmor is enabled in bootloader configuration
+# - 1.3.1.4: Ensure all AppArmor Profiles are enforcing (Level 2)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Prerequisites
+# -----------------------------------------------------------------------------
+
+- name: 1.3.x | Install AppArmor packages
+  ansible.builtin.apt:
+    name:
+      - apparmor
+      - apparmor-utils
+    state: present
+    update_cache: true
+  when: cis_apparmor_bootloader or cis_apparmor_enforce_all
+
+- name: 1.3.x | Enable AppArmor service
+  ansible.builtin.systemd:
+    name: apparmor
+    enabled: true
+    state: started
+  when: cis_apparmor_bootloader or cis_apparmor_enforce_all
+
+# -----------------------------------------------------------------------------
+# 1.3.1.2 - AppArmor in Bootloader
+# -----------------------------------------------------------------------------
+
+- name: 1.3.1.2 | Check current GRUB_CMDLINE_LINUX
+  ansible.builtin.command:
+    cmd: grep "^GRUB_CMDLINE_LINUX=" /etc/default/grub
+  register: grub_cmdline_check
+  changed_when: false
+  failed_when: false
+
+- name: 1.3.1.2 | Extract current GRUB_CMDLINE_LINUX value
+  ansible.builtin.set_fact:
+    current_grub_cmdline: "{{ grub_cmdline_check.stdout | regex_replace('GRUB_CMDLINE_LINUX=\"(.*)\"', '\\1') }}"
+  when: grub_cmdline_check.rc == 0
+
+- name: 1.3.1.2 | Build new GRUB_CMDLINE_LINUX with AppArmor
+  ansible.builtin.set_fact:
+    new_grub_cmdline: >-
+      {{ current_grub_cmdline | default('') }}
+      {{ '' if 'apparmor=1' in (current_grub_cmdline | default('')) else 'apparmor=1' }}
+      {{ '' if 'security=apparmor' in (current_grub_cmdline | default('')) else 'security=apparmor' }}
+  when: cis_apparmor_bootloader
+
+- name: 1.3.1.2 | Configure AppArmor in GRUB
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX='
+    line: 'GRUB_CMDLINE_LINUX="{{ new_grub_cmdline | trim | regex_replace("\\s+", " ") }}"'
+    backup: true
+  when:
+    - cis_apparmor_bootloader
+    - "'apparmor=1' not in (current_grub_cmdline | default('')) or 'security=apparmor' not in (current_grub_cmdline | default(''))"
+  notify:
+    - update grub
+    - notify reboot required
+
+# -----------------------------------------------------------------------------
+# 1.3.1.4 - AppArmor Enforce Mode (Level 2)
+# -----------------------------------------------------------------------------
+
+- name: 1.3.1.4 | Get AppArmor status
+  ansible.builtin.command:
+    cmd: aa-status --json
+  register: apparmor_status
+  changed_when: false
+  failed_when: false
+  when:
+    - cis_level | int >= 2
+    - cis_apparmor_enforce_all
+
+- name: 1.3.1.4 | Parse AppArmor status
+  ansible.builtin.set_fact:
+    apparmor_json: "{{ apparmor_status.stdout | from_json }}"
+  when:
+    - cis_level | int >= 2
+    - cis_apparmor_enforce_all
+    - apparmor_status.rc == 0
+
+- name: 1.3.1.4 | Find profiles in complain mode
+  ansible.builtin.find:
+    paths: /etc/apparmor.d
+    patterns: "*"
+    file_type: file
+    excludes:
+      - "abstractions"
+      - "disable"
+      - "force-complain"
+      - "local"
+      - "tunables"
+      - "lxc"
+      - "*.dpkg-*"
+  register: apparmor_profiles
+  when:
+    - cis_level | int >= 2
+    - cis_apparmor_enforce_all
+
+- name: 1.3.1.4 | Enforce all AppArmor profiles
+  ansible.builtin.command:
+    cmd: "aa-enforce {{ item.path }}"
+  loop: "{{ apparmor_profiles.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - cis_level | int >= 2
+    - cis_apparmor_enforce_all
+    - apparmor_profiles.files is defined
+  register: enforce_result
+  changed_when: "'Setting' in enforce_result.stdout"
+  failed_when: false

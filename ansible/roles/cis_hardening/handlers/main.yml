@@ -1,0 +1,161 @@
+---
+# =============================================================================
+# Handlers for CIS Hardening Role
+# =============================================================================
+# These handlers manage service restarts and reboot notifications.
+# They are triggered by tasks that make changes requiring service reload
+# or system reboot.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Reboot Notification Handlers
+# -----------------------------------------------------------------------------
+
+- name: Set reboot required flag
+  ansible.builtin.set_fact:
+    cis_reboot_required: true
+  listen: "notify reboot required"
+
+- name: Create reboot required marker file
+  ansible.builtin.file:
+    path: /var/run/reboot-required.pkgs
+    state: touch
+    mode: '0644'
+  listen: "notify reboot required"
+
+- name: Log reboot requirement
+  ansible.builtin.lineinfile:
+    path: /var/run/reboot-required.pkgs
+    line: "cis-hardening: {{ ansible_date_time.iso8601 }}"
+    create: true
+    mode: '0644'
+  listen: "notify reboot required"
+
+# -----------------------------------------------------------------------------
+# GRUB Handlers
+# -----------------------------------------------------------------------------
+
+- name: Update GRUB configuration
+  ansible.builtin.command:
+    cmd: update-grub
+  listen: "update grub"
+  notify: "notify reboot required"
+
+# -----------------------------------------------------------------------------
+# Sysctl Handlers
+# -----------------------------------------------------------------------------
+
+- name: Reload sysctl
+  ansible.builtin.command:
+    cmd: sysctl --system
+  listen: "reload sysctl"
+
+# -----------------------------------------------------------------------------
+# Service Handlers
+# -----------------------------------------------------------------------------
+
+- name: Restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
+  listen: "restart rsyslog"
+
+- name: Restart auditd
+  ansible.builtin.systemd:
+    name: auditd
+    state: restarted
+  listen: "restart auditd"
+
+- name: Reload auditd rules
+  ansible.builtin.command:
+    cmd: augenrules --load
+  listen: "reload audit rules"
+  register: audit_reload_result
+  failed_when: false
+  changed_when: audit_reload_result.rc == 0
+
+- name: Check if audit reload requires reboot
+  ansible.builtin.command:
+    cmd: auditctl -s
+  register: audit_status
+  changed_when: false
+  failed_when: false
+  listen: "reload audit rules"
+
+- name: Notify if audit rules locked
+  ansible.builtin.debug:
+    msg: "Audit rules are locked (immutable mode). Reboot required to apply changes."
+  when: "'enabled 2' in audit_status.stdout"
+  listen: "reload audit rules"
+  notify: "notify reboot required"
+
+# -----------------------------------------------------------------------------
+# AppArmor Handlers
+# -----------------------------------------------------------------------------
+
+- name: Reload AppArmor profiles
+  ansible.builtin.command:
+    cmd: systemctl reload apparmor
+  listen: "reload apparmor"
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Module Handlers
+# -----------------------------------------------------------------------------
+
+- name: Update initramfs
+  ansible.builtin.command:
+    cmd: update-initramfs -u
+  listen: "update initramfs"
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# SSH Handlers
+# -----------------------------------------------------------------------------
+
+- name: Restart SSH daemon
+  ansible.builtin.systemd:
+    name: "{{ 'ssh' if ansible_distribution == 'Ubuntu' else 'sshd' }}"
+    state: restarted
+  listen: "restart sshd"
+
+# -----------------------------------------------------------------------------
+# Postfix Handlers
+# -----------------------------------------------------------------------------
+
+- name: Restart postfix
+  ansible.builtin.systemd:
+    name: postfix
+    state: restarted
+  listen: "restart postfix"
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# nftables Handlers
+# -----------------------------------------------------------------------------
+
+- name: Reload nftables
+  ansible.builtin.systemd:
+    name: nftables
+    state: restarted
+  listen: "reload nftables"
+
+# -----------------------------------------------------------------------------
+# Fail2Ban Handlers
+# -----------------------------------------------------------------------------
+
+- name: Restart fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: restarted
+  listen: "Restart fail2ban"
+
+# -----------------------------------------------------------------------------
+# ClamAV Handlers
+# -----------------------------------------------------------------------------
+
+- name: Restart clamav-freshclam
+  ansible.builtin.systemd:
+    name: clamav-freshclam
+    state: restarted
+  listen: "restart clamav"

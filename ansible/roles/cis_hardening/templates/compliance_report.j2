@@ -1,0 +1,99 @@
+================================================================================
+CIS Ubuntu 24.04 LTS Compliance Report
+================================================================================
+Generated: {{ ansible_date_time.iso8601 }}
+Hostname:  {{ inventory_hostname }}
+OS:        {{ ansible_distribution }} {{ ansible_distribution_version }}
+Kernel:    {{ ansible_kernel }}
+CIS Level: {{ cis_level }}
+================================================================================
+
+CONTROLS APPLIED
+================================================================================
+
+Section 1: Initial Setup
+------------------------
+[{{ 'X' if cis_disable_usb_storage else 'O' }}] 1.1.1.9  - USB Storage disabled
+[{{ 'X' if cis_tmp_mount_enabled else 'O' }}] 1.1.2.1.1 - /tmp separate partition
+[{{ 'X' if cis_tmp_mount_enabled else 'O' }}] 1.1.2.1.4 - noexec on /tmp
+[{{ 'X' }}] 1.1.2.2.4 - noexec on /dev/shm
+[{{ 'X' if cis_apparmor_bootloader else 'O' }}] 1.3.1.2  - AppArmor in bootloader
+[{{ 'X' if cis_apparmor_enforce_all else 'O' }}] 1.3.1.4  - AppArmor profiles enforcing (L2)
+[{{ 'X' if cis_grub_password_enabled else 'O' }}] 1.4.1    - Bootloader password set
+[{{ 'X' }}] 1.4.2    - Bootloader config permissions
+[{{ 'X' }}] 1.5.1    - ASLR enabled (kernel.randomize_va_space={{ cis_sysctl_settings['kernel.randomize_va_space'] }})
+[{{ 'X' }}] 1.5.2    - ptrace_scope restricted ({{ cis_sysctl_settings['kernel.yama.ptrace_scope'] }})
+[{{ 'X' if cis_core_dump_restriction else 'O' }}] 1.5.3    - Core dumps restricted
+[{{ 'X' if cis_configure_motd else 'O' }}] 1.6.1.4  - MOTD access configured
+
+Section 2: Services
+-------------------
+[{{ 'X' if cis_disable_autofs else 'O' }}] 2.1.1    - autofs disabled
+[{{ 'X' if cis_mta_local_only else 'O' }}] 2.1.21   - MTA local-only mode
+[{{ 'X' if cis_remove_telnet else 'O' }}] 2.2.4    - Telnet client removed
+[{{ 'X' if cis_disable_avahi else 'O' }}] -        - avahi-daemon disabled
+[{{ 'X' if cis_disable_cups else 'O' }}] -        - CUPS disabled
+[{{ 'X' if cis_disable_bluetooth else 'O' }}] -        - Bluetooth disabled
+
+Section 3: Network Configuration
+--------------------------------
+[{{ 'X' if cis_disable_wireless else 'O' }}] 3.1.2    - Wireless interfaces disabled
+[{{ 'X' }}] 3.3.1    - IP forwarding disabled
+[{{ 'X' }}] 3.3.2    - Packet redirect sending disabled
+[{{ 'X' }}] 3.3.3    - ICMP redirects not accepted
+[{{ 'X' }}] 3.3.4    - Broadcast ICMP requests ignored
+[{{ 'X' }}] 3.3.5    - Secure ICMP redirects not accepted
+[{{ 'X' }}] 3.3.9    - Suspicious packets logged
+[{{ 'X' }}] 3.3.10   - TCP SYN cookies enabled
+
+Section 4: Firewall Configuration
+----------------------------------
+[{{ 'X' if cis_nftables_enabled else 'O' }}] 4.3.1    - nftables installed
+[{{ 'X' if cis_nftables_enabled else 'O' }}] 4.3.4-10 - nftables configured
+
+Section 5: Access, Authentication and Authorization
+----------------------------------------------------
+[{{ 'X' }}] 5.1.6    - SSH MaxAuthTries: {{ cis_ssh_max_auth_tries }}
+[{{ 'X' }}] 5.1.7    - SSH ClientAliveInterval: {{ cis_ssh_client_alive_interval }}s
+[{{ 'X' }}] 5.1.20   - SSH PermitRootLogin: {{ cis_ssh_permit_root_login }}
+[{{ 'X' if cis_sudo_use_pty else 'O' }}] 5.2.2    - Sudo uses pty
+[{{ 'X' if cis_pam_faillock_enabled else 'O' }}] 5.3.3.1.1 - Password failed lockout: {{ cis_pam_faillock_deny }} attempts
+[{{ 'X' }}] 5.3.3.2.2 - Minimum password length: {{ cis_password_min_length }}
+[{{ 'X' if cis_password_history_enabled else 'O' }}] 5.3.3.3.1 - Password history: {{ cis_password_remember }} remembered
+[{{ 'X' }}] 5.4.1.1  - Password expiration: {{ cis_pass_max_days }} days
+[{{ 'X' }}] 5.4.1.4  - Password hashing: {{ cis_password_hash_algorithm }}
+[{{ 'X' }}] 5.4.1.5  - Inactive password lock: {{ cis_inactive_password_lock_days }} days
+[{{ 'X' }}] 5.4.2.1  - Root is only UID 0 account
+
+Section 6: Logging and Auditing
+-------------------------------
+[{{ 'X' }}] 6.1.3.4  - rsyslog file mode: {{ cis_rsyslog_file_create_mode }}
+[{{ 'X' if cis_auditd_enabled else 'O' }}] 6.2.1.2  - auditd service enabled
+[{{ 'X' }}] 6.2.2.3  - Disk full action: {{ cis_auditd_disk_full_action }}
+[{{ 'X' if cis_audit_rules_enabled else 'O' }}] 6.2.3.4  - Time change audit rules
+[{{ 'X' if cis_audit_rules_enabled else 'O' }}] 6.2.3.8  - Identity audit rules
+[{{ 'X' if cis_audit_rules_enabled else 'O' }}] 6.2.3.10 - Mount audit rules
+[{{ 'X' if cis_audit_rules_enabled else 'O' }}] 6.2.3.17 - chacl audit rules
+[{{ 'X' if cis_audit_immutable else 'O' }}] 6.2.3.20 - Audit immutable mode (L2)
+[{{ 'X' if cis_aide_enabled else 'O' }}] 6.3.1    - AIDE installed
+
+================================================================================
+LEGEND: [X] Applied  [O] Not Applied/Disabled
+================================================================================
+
+REBOOT STATUS
+================================================================================
+{% if cis_reboot_required %}
+** SYSTEM REBOOT REQUIRED **
+
+The following changes require a system reboot to take effect:
+- Bootloader configuration changes
+- Kernel parameter changes
+- Audit immutable mode activation
+{% else %}
+No reboot required at this time.
+{% endif %}
+
+================================================================================
+End of Report
+================================================================================

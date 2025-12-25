@@ -1,0 +1,87 @@
+# =============================================================================
+# CIS SSH Server Hardening Configuration
+# =============================================================================
+# Managed by: Ansible (CIS Hardening Role)
+# Generated: {{ ansible_date_time.iso8601 }}
+# CIS Level: {{ cis_level }}
+# =============================================================================
+# Controls:
+# - 5.1.6:  MaxAuthTries
+# - 5.1.7:  ClientAliveInterval and ClientAliveCountMax
+# - 5.1.12: Strong Ciphers
+# - 5.1.15: Strong MAC algorithms
+# - 5.1.20: PermitRootLogin
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 5.1.6 - Maximum authentication attempts
+# -----------------------------------------------------------------------------
+MaxAuthTries {{ cis_ssh_max_auth_tries | default(3) }}
+
+# -----------------------------------------------------------------------------
+# 5.1.7 - Client alive settings (session timeout)
+# -----------------------------------------------------------------------------
+ClientAliveInterval {{ cis_ssh_client_alive_interval | default(300) }}
+ClientAliveCountMax {{ cis_ssh_client_alive_count_max | default(3) }}
+
+# -----------------------------------------------------------------------------
+# 5.1.12 - Strong Ciphers only
+# -----------------------------------------------------------------------------
+Ciphers {{ cis_ssh_ciphers | default('aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr') }}
+
+# -----------------------------------------------------------------------------
+# 5.1.15 - Strong MAC algorithms only
+# -----------------------------------------------------------------------------
+MACs {{ cis_ssh_macs | default('hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256') }}
+
+# -----------------------------------------------------------------------------
+# 5.1.x - Key Exchange algorithms
+# -----------------------------------------------------------------------------
+KexAlgorithms {{ cis_ssh_kex_algorithms | default('curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256') }}
+
+# -----------------------------------------------------------------------------
+# 5.1.20 - Root login
+# -----------------------------------------------------------------------------
+PermitRootLogin {{ cis_ssh_permit_root_login | default('no') }}
+
+# -----------------------------------------------------------------------------
+# Additional hardening settings
+# -----------------------------------------------------------------------------
+# Disable X11 forwarding
+X11Forwarding {{ cis_ssh_x11_forwarding | default('no') }}
+
+# Disable empty passwords
+PermitEmptyPasswords no
+
+# Disable host-based authentication
+HostbasedAuthentication no
+
+# Ignore rhosts
+IgnoreRhosts yes
+
+# Strict mode
+StrictModes yes
+
+# Login grace time
+LoginGraceTime {{ cis_ssh_login_grace_time | default(60) }}
+
+# Maximum sessions
+MaxSessions {{ cis_ssh_max_sessions | default(10) }}
+
+# Maximum startups (rate limiting)
+MaxStartups {{ cis_ssh_max_startups | default('10:30:60') }}
+
+# Use PAM
+UsePAM yes
+
+# Banner
+Banner {{ cis_ssh_banner | default('/etc/issue.net') }}
+
+# Log level
+LogLevel {{ cis_ssh_log_level | default('VERBOSE') }}
+
+# Disable TCP forwarding (unless needed)
+AllowTcpForwarding {{ cis_ssh_allow_tcp_forwarding | default('no') }}
+
+# Disable agent forwarding (unless needed)
+AllowAgentForwarding {{ cis_ssh_allow_agent_forwarding | default('no') }}

@@ -1,0 +1,38 @@
+---
+# =============================================================================
+# Section 6.1: Logging (rsyslog)
+# =============================================================================
+# Controls:
+# - 6.1.3.4: Ensure rsyslog log file creation mode is configured
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 6.1.3.4 - rsyslog File Creation Mode
+# -----------------------------------------------------------------------------
+
+- name: 6.1.3.4 | Check if rsyslog is installed
+  ansible.builtin.command:
+    cmd: which rsyslogd
+  register: rsyslog_installed
+  changed_when: false
+  failed_when: false
+
+- name: 6.1.3.4 | Create rsyslog.d directory
+  ansible.builtin.file:
+    path: /etc/rsyslog.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  when: rsyslog_installed.rc == 0
+
+- name: 6.1.3.4 | Configure rsyslog file creation mode
+  ansible.builtin.lineinfile:
+    path: /etc/rsyslog.d/60-cis-hardening.conf
+    line: "$FileCreateMode {{ cis_rsyslog_file_create_mode }}"
+    create: true
+    owner: root
+    group: root
+    mode: '0644'
+  when: rsyslog_installed.rc == 0
+  notify: restart rsyslog

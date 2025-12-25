@@ -1,0 +1,18 @@
+---
+# =============================================================================
+# Level 2 Servers Group Variables
+# =============================================================================
+# Variables for high-security servers that require Level 2 compliance.
+# =============================================================================
+
+cis_level: 2
+
+# Level 2 specific settings
+cis_apparmor_enforce_all: true
+cis_audit_immutable: true
+
+# More restrictive ptrace for L2
+cis_sysctl_settings:
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 2
+  fs.suid_dumpable: 0

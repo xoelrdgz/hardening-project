@@ -1,0 +1,60 @@
+---
+# =============================================================================
+# CIS Ubuntu 24.04 LTS Hardening Playbook
+# =============================================================================
+# This playbook applies CIS Benchmark hardening controls to Ubuntu 24.04 LTS
+# servers. It supports both Level 1 and Level 2 profiles.
+#
+# Usage:
+#   ansible-playbook -i inventories/production site.yml --ask-vault-pass
+#   ansible-playbook -i inventories/production site.yml -e "cis_level=1"
+#   ansible-playbook -i inventories/production site.yml --check --diff
+# =============================================================================
+
+- name: CIS Ubuntu 24.04 LTS Hardening
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Validate target OS
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version is version('24.04', '>=')
+        fail_msg: "This playbook is designed for Ubuntu 24.04 LTS or later"
+        success_msg: "Target OS validated: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+      tags: always
+
+    - name: Display hardening configuration
+      ansible.builtin.debug:
+        msg:
+          - "CIS Compliance Level: {{ cis_level }}"
+          - "Audit Mode: {{ cis_audit_only | default(false) }}"
+          - "Target Host: {{ inventory_hostname }}"
+      tags: always
+
+  roles:
+    - role: cis_hardening
+      tags: hardening
+
+  post_tasks:
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_file
+      tags: always
+
+    - name: Display reboot status
+      ansible.builtin.debug:
+        msg: "NOTICE: System reboot is required to complete hardening"
+      when: reboot_required_file.stat.exists or cis_reboot_required | default(false)
+      tags: always
+
+    - name: Generate compliance report
+      ansible.builtin.template:
+        src: roles/cis_hardening/templates/compliance_report.j2
+        dest: "/var/log/cis-hardening/compliance-report-{{ ansible_date_time.iso8601_basic_short }}.txt"
+        mode: '0640'
+      when: cis_generate_report | default(true)
+      tags: report
