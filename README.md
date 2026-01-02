@@ -4,7 +4,6 @@
 ![CIS Benchmark](https://img.shields.io/badge/CIS-v1.0.0-005A9C)
 ![Ansible](https://img.shields.io/badge/Ansible-2.14%2B-1A1918?logo=ansible)
 ![Lynis](https://img.shields.io/badge/Lynis-Integrated-00C853)
-![License](https://img.shields.io/badge/License-MIT-green)
 
 A production-ready implementation of CIS Benchmark security controls for Ubuntu Server 24.04 LTS, featuring standalone Bash scripts, an idempotent Ansible role, Lynis integration, and comprehensive security tooling.
 
@@ -344,7 +343,7 @@ rkhunter --check
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
 
 **Notice**: This project implements controls from the CIS Benchmarks. CIS Benchmarks are copyright of the Center for Internet Security, Inc. Users should obtain the official CIS Benchmark documentation from the CIS website.
 
